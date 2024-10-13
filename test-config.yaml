@@ -1,0 +1,206 @@
+apiVersion: v1
+data:
+  ca.crt: data2
+kind: ConfigMap
+metadata:
+  name: test-external
+  namespace: default
+
+---
+#apiVersion: v1
+#data:
+#  ca.crt: YXNkYXNkYXNkYXNkYXNk
+#kind: Secret
+#metadata:
+#  name: test-external
+#  namespace: default
+
+---
+
+apiVersion: external-config.com/v1alpha1
+
+kind: ConfigMapClaim
+metadata:
+  name: test-external-cmc
+  namespace: default
+spec:
+  data:
+    config.yaml:
+      from:
+        - configurationStoreRef:
+            kind: ConfigurationStore
+            name: test-external-source-yaml
+          configurationStoreParams:
+            testParam1: asd
+            testParam2: asd
+
+        - configurationStoreRef:
+            kind: ConfigurationStore
+            name: test-external-source-env
+          configurationStoreParams:
+            testParam1: asd
+            testParam2: asd
+
+        - configurationStoreRef:
+            kind: ConfigurationStore
+            name: test-external-source-properties
+          configurationStoreParams:
+            testParam1: asd
+            testParam2: asd
+
+        - configurationStoreRef:
+            kind: ConfigurationStore
+            name: test-external-source
+          configurationStoreParams:
+            testParam1: asd
+            testParam2: asd
+      strategy: Merge
+
+#    config2.yaml:
+#      from:
+#        - configurationStoreRef:
+#            kind: ConfigurationStore
+#            name: test-external-source
+#          configurationStoreParams:
+#            testParam1: asd
+#            testParam2: asd
+#      strategy: Merge
+#    config3.yaml:
+#      from:
+#        - configurationStoreRef:
+#            kind: ConfigurationStore
+#            name: test-external-source
+#          configurationStoreParams:
+#            testParam1: asd
+#            testParam2: asd
+#      strategy: Merge
+
+  target:
+    creationPolicy: Owned
+    name: test-external
+
+  refreshInterval: 5m
+
+#---
+#
+#apiVersion: external-config.com/v1alpha1
+#
+#kind: SecretClaim
+#metadata:
+#  name: test-external-sc
+#  namespace: default
+#spec:
+#  data:
+#    config.yaml:
+#      from:
+#        - configurationStoreRef:
+#            kind: ConfigurationStore
+#            name: bad-test-external-source
+#          configurationStoreParams:
+#            testParam1: asd
+#            testParam2: asd
+#        - configurationStoreRef:
+#            kind: ConfigurationStore
+#            name: test-external-source-yaml
+#        - configurationStoreRef:
+#            kind: ConfigurationStore
+#            name: test-external-source
+#          configurationStoreParams:
+#            testParam1: asd
+#            testParam2: asd
+#      strategy: Merge
+##      params:
+##        repository: Test
+##        uptoVersion: 2.0.0
+##        releaseChannel: master
+#
+#    config2.yaml:
+#      from:
+#        - configurationStoreRef:
+#            kind: ConfigurationStore
+#            name: test-external-source
+#          configurationStoreParams:
+#            testParam1: asd
+#            testParam2: asd
+#      strategy: Merge
+#    config3.yaml:
+#      from:
+#        - configurationStoreRef:
+#            kind: ConfigurationStore
+#            name: test-external-source
+#          configurationStoreParams:
+#            testParam1: asd
+#            testParam2: asd
+#      strategy: Merge
+#
+#  target:
+#    creationPolicy: Owned
+#    name: test-external
+#
+#  refreshInterval: 5m
+#
+---
+
+apiVersion: external-config.com/v1alpha1
+kind: ConfigurationStore
+metadata:
+  name: test-external-source
+spec:
+  provider:
+    http:
+      url: https://raw.githubusercontent.com/Ylianst/MeshCentral/refs/heads/master/sample-config.json
+
+---
+apiVersion: external-config.com/v1alpha1
+kind: ConfigurationStore
+metadata:
+  name: test-external-source-yaml
+spec:
+  provider:
+    http:
+      url: https://raw.githubusercontent.com/argoproj/argo-workflows/refs/heads/main/examples/input-artifact-raw.yaml
+
+
+---
+apiVersion: external-config.com/v1alpha1
+kind: ConfigurationStore
+metadata:
+  name: test-external-source-env
+spec:
+  provider:
+    http:
+      url: https://raw.githubusercontent.com/platformsh-templates/laravel/refs/heads/master/.env.example
+
+---
+apiVersion: external-config.com/v1alpha1
+kind: ConfigurationStore
+metadata:
+  name: test-external-source-properties
+spec:
+  provider:
+    http:
+      url: https://raw.githubusercontent.com/u-ways/kotlin-quarkus-realworld-example-app/refs/heads/main/src/main/resources/application.properties
+
+
+---
+
+apiVersion: external-config.com/v1alpha1
+kind: ClusterConfigurationStore
+metadata:
+  name: ctest-external-source
+spec:
+  provider:
+    http:
+      url: https://raw.githubusercontent.com/LearnWebCode/json-example/refs/heads/master/animals-1.json
+
+---
+
+apiVersion: external-config.com/v1alpha1
+kind: ConfigurationStore
+metadata:
+  name: bad-test-external-source
+spec:
+  provider:
+    http:
+      url: htt://raw.githubuserconten/json-example/refs/heads/master/animals-1.json
+
