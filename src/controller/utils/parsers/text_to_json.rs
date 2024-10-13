@@ -8,6 +8,7 @@ use crate::contract::lib::Error;
 use crate::controller::utils::file_format::ConfigFormat;
 use env_file_reader::read_str;
 use crate::controller::utils::parsers::key_value_to_json;
+use crate::controller::utils::parsers::key_value_to_json::TransformKind;
 
 /// Parses `.properties` files using `java-properties` and converts them into a nested JSON structure.
 fn try_parse_from_properties(content: &str) -> Result<ConfigFormat, Error> {
@@ -15,7 +16,9 @@ fn try_parse_from_properties(content: &str) -> Result<ConfigFormat, Error> {
 
     // Use `java-properties` to read key-value pairs into a HashMap
     let properties: HashMap<String, String> = java_properties::read(reader).map_err(|e| Error::PropertiesSerializationError(e))?;
-    let map = key_value_to_json::key_value_pairs_to_json(properties, '.', None);
+
+    let transforms = [];
+    let map = key_value_to_json::key_value_pairs_to_json(properties, '.', None, &transforms);
 
     Ok(ConfigFormat::Json(JsonValue::Object(map)))
 
@@ -28,7 +31,9 @@ fn try_parse_from_env(content: &str) -> Result<ConfigFormat, Error> {
 
     // Use `env_file_reader` to read key-value pairs into a HashMap
     let env_vars: HashMap<String, String> = read_str(content).map_err(|e| Error::EnvFileSerializationError(e))?;
-    let map = key_value_to_json::key_value_pairs_to_json(env_vars, '_', None);
+
+    let transforms = [TransformKind::ToCamelCase];
+    let map = key_value_to_json::key_value_pairs_to_json(env_vars, '_', Some("_"), &transforms);
 
     Ok(ConfigFormat::Json(JsonValue::Object(map)))
 }
