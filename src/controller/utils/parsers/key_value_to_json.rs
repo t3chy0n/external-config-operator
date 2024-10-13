@@ -42,7 +42,7 @@ fn handle_string_part(current_map: &mut Map<String, Value>, parts: &[&str], valu
         if let Value::Object(obj) = entry {
             insert_into_map(obj, &parts[1..], value, separator);
         } else {
-            panic!("Expected object but found a different value");
+           // panic!("Expected object but found a different value");
         }
     }
 }
@@ -103,13 +103,13 @@ pub fn key_value_pairs_to_json(
 
     for (key, value) in properties {
         let parts: Vec<&str> = if let Some(escape_seq) = escape {
-            let split_regex = Regex::new(&format!(
-                r"(?<!{}){}",
-                regex::escape(escape_seq),
-                regex::escape(&separator.to_string())
-            ))
-                .unwrap();
-            split_regex.split(&key).collect()
+            let escaped_separator = format!("{}", regex::escape(&separator.to_string()));
+            let escape_pattern = format!(r"{}{}", regex::escape(escape_seq), escaped_separator);
+            let split_regex = Regex::new(&escape_pattern).unwrap();
+
+            key.split(separator)
+                .filter(|part| !split_regex.is_match(part))
+                .collect()
         } else {
             key.split(separator).collect()
         };
