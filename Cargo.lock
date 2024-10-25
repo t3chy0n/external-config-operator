@@ -542,6 +542,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "config",
+ "convert_case",
  "dotenvy",
  "env-file-reader",
  "futures",

@@ -1,9 +1,11 @@
 use std::sync::Arc;
 use async_trait::async_trait;
+use k8s_openapi::NamespaceResourceScope;
 use kube::{Client, Resource};
 use kube::runtime::controller::Action;
 use kube::runtime::events::{Event, EventType, Recorder, Reporter};
 use crate::controller::utils::context::Data;
+use crate::controller::utils::crd::HasData;
 use super::lib::{Error, Result};
 
 #[async_trait]
@@ -42,3 +44,28 @@ pub trait IReconcilable: Resource<DynamicType = ()> {
         Ok(())
     }
 }
+
+pub trait ReconcilableTargetTypeBounds:
+    Resource<DynamicType = (), Scope = NamespaceResourceScope>
+        + Clone
+        + std::fmt::Debug
+        + Default
+        + HasData
+        + Sync
+        + Send
+        + serde::de::DeserializeOwned
+        + serde::Serialize
+    {}
+
+// Automatically implement the helper trait for any type that satisfies the constraints
+impl<T> ReconcilableTargetTypeBounds for T where
+    T: Resource<DynamicType = (), Scope = NamespaceResourceScope>
+        + Clone
+        + std::fmt::Debug
+        + Default
+        + HasData
+        + Sync
+        + Send
+        + serde::de::DeserializeOwned
+        + serde::Serialize
+{}
