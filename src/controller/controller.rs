@@ -4,7 +4,7 @@ use std::time::Duration;
 use k8s_openapi::api::core::v1::ConfigMap;
 use k8s_openapi::NamespaceResourceScope;
 use kube::{
-    api::{Api, ListParams, Patch, PatchParams, ResourceExt},
+    api::{Api, ListParams, Patch, PatchParams, ResourceExt, DynamicObject, GroupVersionKind, PostParams},
     client::Client,
     runtime::{
         controller::{Action, Controller},
@@ -17,11 +17,17 @@ use kube::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use futures::stream::StreamExt;
+use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
+use kube::api::ApiResource;
+use serde_yaml::Value;
 use tracing::{error, info};
 use crate::contract::ireconcilable::IReconcilable;
 use crate::contract::lib::Error;
 use crate::controller::utils::context::Data;
 use crate::contract::lib::Result;
+use crate::controller::v1alpha1::controller::crds;
+use crate::controller::v1alpha1::crd::claim::{ConfigMapClaim, SecretClaim};
+use crate::controller::v1alpha1::crd::configuration_store::{ClusterConfigurationStore, ConfigurationStore};
 
 // #[instrument(skip(ctx, doc), fields(trace_id))]
 pub static DOCUMENT_FINALIZER: &str = "test.io/documents.kube3.rs";
@@ -54,7 +60,6 @@ where
 {
 
     error!("Error reconciling: {:?}", error);
-
     Action::requeue(Duration::from_secs(60))
 
 
@@ -83,4 +88,81 @@ where
         })
         .await;
 
+}
+
+
+
+
+async fn apply_crd(client: &Client, crd: &CustomResourceDefinition) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let crd_yaml = serde_yaml::to_string(&crd)?;
+    println!("{crd_yaml}");
+    println!("---");
+
+    // Define the Kubernetes API endpoint for CRDs
+    let crd_api: Api<CustomResourceDefinition> = Api::all(client.clone());
+
+    // Apply the CRD
+    match crd_api.create(&PostParams::default(), crd).await {
+        Ok(created) => {
+            println!("Applied CRD: {}", created.name_any());
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("Failed to apply CRD: {:?}", e);
+            Err(e.into())
+        }
+    }
+}
+
+
+
+pub async fn apply_all_crds(client: &Client) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let crds:Vec<CustomResourceDefinition> = crate::controller::v1alpha1::controller::crds();
+        // .extend(); TODO: For new versions extend this
+    for crd in crds.iter() {
+        apply_crd(&client, crd).await?;
+    }
+
+    Ok(())
+}
+
+/// Utility function to deploy a CRD from a YAML file
+pub async fn apply_from_yaml(client: Arc<Client>, manifest_yaml: &str) -> Result<(), Box<dyn std::error::Error>> {
+
+    // Parse the YAML into a serde_yaml::Value to read its metadata
+    let manifest: Value = serde_yaml::from_str(&manifest_yaml)?;
+
+    // Extract necessary fields for GroupVersionKind
+    let api_version = manifest.get("apiVersion").and_then(|v| v.as_str()).ok_or("Missing apiVersion")?.to_string();
+    let kind = manifest.get("kind").and_then(|v| v.as_str()).ok_or("Missing kind")?.to_string();
+    let metadata = manifest.get("metadata").ok_or("Missing metadata")?;
+    let namespace = metadata.get("namespace").and_then(|v| v.as_str()).unwrap_or("default").to_string();
+
+    // Create a DynamicObject with GroupVersionKind
+    // Split apiVersion into group and version
+    let parts: Vec<&str> = api_version.split('/').collect();
+    let (group, version) = if parts.len() == 2 {
+        (parts[0], parts[1])
+    } else {
+        ("", parts[0]) // Core API group has no group part, only version
+    };
+
+
+    // Create a GroupVersionKind with group, version, and kind
+    let gvk = GroupVersionKind::gvk(group, version, kind.as_str());
+    let api_resource = ApiResource::from_gvk(&gvk);
+    let dynamic_api: Api<DynamicObject> = Api::namespaced_with((*client).clone(), namespace.as_str(), &api_resource);
+
+    // Convert manifest into DynamicObject and apply it
+    let dynamic_object: DynamicObject = serde_yaml::from_value(manifest)?;
+    match dynamic_api.create(&PostParams::default(), &dynamic_object).await {
+        Ok(created) => {
+            println!("Successfully deployed {}: {}", kind, created.name_any());
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("Failed to deploy {}: {:?}", kind, e);
+            Err(e.into())
+        }
+    }
 }

@@ -1,6 +1,8 @@
 use java_properties::PropertiesError;
 use kube::core::ErrorResponse;
 use thiserror::Error;
+use tokio::task::JoinError;
+
 pub type Result<T, E = Error > = std::result::Result<T, E >;
 #[derive(Error, Debug)]
 pub enum Error {
@@ -47,6 +49,9 @@ pub enum Error {
 
     #[error("IllegalDocument")]
     IllegalDocument,
+
+    #[error("Thread join error")]
+    ThreadJoinError(#[source] JoinError),
 
 
 }

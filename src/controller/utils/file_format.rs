@@ -115,7 +115,7 @@ pub fn to_file_type_from_filename(filename: &str) -> Option<ConfigFileType> {
 }
 
 /// Converts a structured configuration format back to its string representation.
-pub fn convert_to_format(config: &ConfigFormat, file_type: &ConfigFileType) -> Result<String, Error> {
+pub fn convert_to_format(config : &ConfigFormat, file_type: &ConfigFileType) -> Result<String, Error> {
     match (config, file_type) {
         (ConfigFormat::Json(json), ConfigFileType::Json | ConfigFileType::Json5) => {
             serde_json::to_string_pretty(&json).map_err(|r| Error::JsonSerializationError(r))
