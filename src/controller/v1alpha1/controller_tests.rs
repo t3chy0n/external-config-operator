@@ -201,6 +201,26 @@ mod tests {
         Ok(config)
 
     }
+    async fn test_successful_cluster_config_store_data_resolution(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+
+        // Verify `ClusterConfigurationStore` CRD is deployed
+        let store_name = "test-crd-deployment-cluster-config-store";
+        let namespace = "default";
+
+        fixture.prepare_single_cluster_config_store_claim_scenario(store_name, vec![MockConfig::success_with_body("{\"asd\": 1}")]).await;
+
+        // Attempt to get the CRD instance and confirm structure
+        let store = crd_client.get_cluster_config_store(format!("{}-store",store_name).as_str()).await?;
+
+        let config_store = store.spec.provider.get_config_store();
+
+        let config = config_store.get_config(None).await.expect("Config should be returned");
+
+        assert_eq!(config, "{\"asd\": 1}");
+
+        Ok(config)
+
+    }
 
     async fn test_client_error_config_store_data_resolution(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
@@ -623,11 +643,10 @@ DB__CONFIG_TIMEOUT=1000"#);
     }
 
     // Additional subtest functions can be defined here
-
     // Use the macro to generate multiple test sets with grouped subtests
     define_k8s_tests!({
-            // Test name `run_crd_tests` with its client function and subtests
             test_successful_config_store_data_resolution,
+            test_successful_cluster_config_store_data_resolution,
             test_client_error_config_store_data_resolution,
             test_server_error_config_store_data_resolution,
             test_config_store_returns_data_depending_on_params,
@@ -635,7 +654,6 @@ DB__CONFIG_TIMEOUT=1000"#);
             test_config_files_with_merging_reconcilation,
             test_config_files_with_merging_reconcilation_with_cluster_config_store,
             test_basic_reconcilation_with_cluster_config_store,
-           //  // Test name `run_feature_tests` with its client function and different subtests
            // test_other_feature,
            // test_other_feature2,
            // test_other_feature3,
