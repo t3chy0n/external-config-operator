@@ -12,9 +12,12 @@ use json5;
 use config::{Config, File, FileFormat};
 use futures::StreamExt;
 use std::path::Path;
+use convert_case::{Case, Converter, Pattern};
 use dotenvy::{dotenv, Iter};
 use java_properties::{Line, PropertiesIter};
 use serde_json::{Map, Value};
+use crate::controller::utils::parsers::json_to_key_value::json_to_key_value_pairs;
+
 #[derive( Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub enum ConfigFileType {
     Json,
@@ -127,14 +130,49 @@ pub fn convert_to_format(config : &ConfigFormat, file_type: &ConfigFileType) -> 
         (ConfigFormat::Json(json), ConfigFileType::Yaml) => {
             serde_yaml::to_string(&json).map_err(|e| Error::YamlSerializationError(e))
         }
-        (ConfigFormat::Json(json), ConfigFileType::EnvFile | ConfigFileType::Properties) => {
-            let config_map: HashMap<String, String> = serde_json::from_value(json.clone()).map_err(|e| Error::JsonSerializationError(e))?;
-            let result = config_map
-                .into_iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect::<Vec<String>>()
-                .join("\n");
-            Ok(result)
+        (ConfigFormat::Json(json), ConfigFileType::Properties) => {
+
+            let transforms = [];
+
+            let result = json_to_key_value_pairs(
+                json, '.', ".", &transforms
+            );
+
+            match result {
+                Ok(key_value_map) => {
+                    let result = key_value_map
+                        .into_iter()
+                        .map(|(k, v)| format!("{}={}", k, v))
+                        .collect::<Vec<String>>()
+                        .join("\n");
+                    Ok(result)
+                },
+                Err(e) => Err(e)
+            }
+
+        }
+        (ConfigFormat::Json(json), ConfigFileType::EnvFile ) => {
+
+            let transforms = [ Case::UpperSnake];
+
+            let result = json_to_key_value_pairs(
+                json, '_', "__", &transforms
+            );
+
+            match result {
+                Ok(key_value_map) => {
+                    let result = key_value_map
+                        .into_iter()
+                        .map(|(k, v)|
+                            format!("{}={}", k, v
+                            ))
+                        .collect::<Vec<String>>()
+                        .join("\n");
+                    Ok(result)
+                },
+                Err(e) => Err(e)
+            }
+
         }
         _ => Err(Error::UnsupportedFileType()),
     }

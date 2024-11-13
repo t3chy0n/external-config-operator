@@ -26,6 +26,7 @@ use crate::controller::v1alpha1::crd::configuration_store::{ClusterConfiguration
 use crate::contract::lib::{Error, Result};
 use crate::controller::controller::DOCUMENT_FINALIZER;
 use base64::engine::general_purpose::STANDARD;
+
 use crate::controller::utils::file_format::{convert_to_format, convert_to_json, merge_configs, to_file_type, to_file_type_from_filename, ConfigFileType, ConfigFormat};
 use crate::controller::utils::parsers::text_to_json::try_parse_file_to_json;
 use crate::controller::v1alpha1::configuration_discoverer::ConfigurationDiscoverer;
@@ -189,7 +190,6 @@ impl IReconcilable for ConfigMapClaim {
     }
 
 }
-
 
 #[derive(CustomResource, Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[kube(group = "external-config.com", version="v1alpha1", kind = "SecretClaim", namespaced, shortname = "sc" )]

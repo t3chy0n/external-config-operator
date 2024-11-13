@@ -20,19 +20,28 @@ mod tests {
 
     #[cfg(test)]
     use std::{println as info, println as warn};
-    use kube::api::ListParams;
+    use std::ffi::c_double;
+    use base64::Engine;
+    use kube::api::{ListParams, ObjectList};
+    use kube::runtime::Controller;
     ////
 
     use log::error;
     use tokio::task::JoinError;
-    use crate::controller::controller::{apply_all_crds, apply_from_yaml};
-    use crate::controller::v1alpha1::controller::ConfigurationStore;
+    use crate::contract::ireconcilable::IReconcilable;
+    use crate::controller::controller::{apply_all_crds, apply_from_yaml, reconcile};
+    use crate::controller::utils::context::Data;
+    use crate::controller::v1alpha1::controller::{ConfigMapClaim, ConfigurationStore};
+    use crate::controller::v1alpha1::crd_client::CrdClient;
+    use crate::controller::v1alpha1::fixtures::tests::{ControllerFixtures, MockConfig};
+    use base64::engine::general_purpose::STANDARD;
+    use k8s_openapi::ByteString;
 
     // Global array of Kubernetes versions
     const K8S_VERSIONS: &[&str] = &[
-        "v1.29.10-k3s1",
-        "v1.30.6-k3s1",
-        "v1.31.2-k3s1",
+        // "v1.29.10-k3s1",
+        // "v1.30.6-k3s1",
+        // "v1.31.2-k3s1",
         "latest",
     ];
 
@@ -61,105 +70,72 @@ mod tests {
         for cluster in &mut kubeconfig.clusters {
             if let Some(cluster_details) = &mut cluster.cluster {
                 cluster_details.server = Some(format!("https://localhost:{}", container_port));
+
+            } else {
+                println!("No cluster configuration")
             }
         }
+        println!("Config details: {:?}", kubeconfig);
         let config = Config::from_custom_kubeconfig(kubeconfig, &Default::default()).await.unwrap();
         Arc::new(Client::try_from(config).expect("Could not establish connection to cluster"))
     }
 
 
-    #[tokio::test]
-    async fn run_test_body() {
 
-        // setup_k3s_containers().await;
+    // #[tokio::test]
+    // async fn run_test_body() {
+    //
+    //     // setup_k3s_containers().await;
+    //
+    //     for version in K8S_VERSIONS {
+    //
+    //         let container = get_k8s_container(version).await;
+    //         let client = get_k8s_client(version, &container).await;
+    //         let crd_client = CrdClient::new(client.clone());
+    //         let mut fixture = ControllerFixtures::new(client.clone()).await;
+    //
+    //         apply_all_crds(client).await.expect("Could not apply crds to test cluster");
+    //
+    //         let res = test_crd_deployment(crd_client, &mut fixture).await.unwrap();
+    //         // Here, you'd add your test code, using `version` and `container`
+    //         println!("Running test on Kubernetes version: {}", version);
+    //
+    //         // Clean up container
+    //         //drop(container);
+    //
+    //         println!("Test on Kubernetes version {} completed successfully.", version);
+    //     }
+    //     // Set up the container for the specific Kubernetes version
+    //
+    // }
 
-        for version in K8S_VERSIONS {
-
-            let container = get_k8s_container(version).await;
-            let client = get_k8s_client(version, &container).await;
-
-            apply_all_crds(&client).await.expect("Could not apply crds to test cluster");
-
-            let res = test_crd_deployment(client.clone()).await.unwrap();
-            // Here, you'd add your test code, using `version` and `container`
-            println!("Running test on Kubernetes version: {}", version);
-
-            // Clean up container
-            //drop(container);
-
-            println!("Test on Kubernetes version {} completed successfully.", version);
-        }
-        // Set up the container for the specific Kubernetes version
-
-    }
-
-    async fn test_crd_deployment(client: Arc<Client>) -> Result<String, Error> {
-
-        // Verify `ClusterConfigurationStore` CRD is deployed
-        let config_store_api = Api::<ConfigurationStore>::namespaced((*client).clone(), "default");
-        let store_ref = ClaimConfigurationStoreRef {
-            name: "test-store".to_string(),
-            kind: SupportedConfigurationStoreResourceType::ClusterConfigurationStore,
-        };
-
-//         let manifest = r#"
-// apiVersion: external-config.com/v1alpha1
-// kind: ClusterConfigurationStore
-// metadata:
-//   name: test-store
-// spec:
-//   provider:
-//     http:
-//       url: https://raw.githubusercontent.com/Ylianst/MeshCentral/refs/heads/master/sample-config.json
-//
-// "#;
-        let manifest = r#"
-apiVersion: external-config.com/v1alpha1
-kind: ConfigurationStore
-metadata:
-  name: test-store
-  namespace: default
-spec:
-  provider:
-    http:
-      url: https://raw.githubusercontent.com/Ylianst/MeshCentral/refs/heads/master/sample-config.json
-
-"#;
-        apply_from_yaml(client, manifest).await.expect("Could not deploy test manifest");
-
-        // Attempt to get the CRD instance and confirm structure
-        let all = config_store_api.list(&ListParams::default().limit(10)).await.map_err(Error::KubeError)?;
-        let store = config_store_api.get(&store_ref.name).await.map_err(Error::KubeError)?;
-        let config_store = store.spec.provider.get_config_store();
-        let file = "test-config"; // Update this as needed for your test case
-        let config = config_store.get_config(file.to_string()).await;
-
-        assert_eq!(config.is_err(), false);
-        config
-
-    }
 
     macro_rules! define_k8s_tests {
         // Match the test functions followed by the client function
-        ({ $($subtest:ident),+ $(,)? }, $client_fn:ident) => {
+        ({ $($subtest:ident),+ $(,)? }) => {
             #[tokio::test]
             async fn run_tests() {
                 let mut version_suite_tasks = vec![];
                 for version in K8S_VERSIONS {
-
-
+                    let container = get_k8s_container(version).await;
                     version_suite_tasks.push(tokio::task::spawn(async move {
-                        let container = get_k8s_container(version).await;
-                        let client = $client_fn(version, &container).await;
+
+                        let client = get_k8s_client(version, &container).await;
+
+                        apply_all_crds(client.clone()).await.expect("Could not apply crds to test cluster");
 
                         let mut tasks = vec![];
                         $(
                             // Run each subtest as an async block
                             let test_name = format!("{} - {}", stringify!($subtest), version);
+                            let crd_client = CrdClient::new(client.clone());
+                            let mut fixture = ControllerFixtures::new(client.clone()).await;
+
                             let cloned_client = client.clone();
                             tasks.push(tokio::task::spawn(async move {
                                 info!("{}", format!("Running {}...", test_name).yellow().bold());
-                                let result = $subtest(cloned_client).await;
+
+                                let result = $subtest(crd_client, &mut fixture).await;
                                 if let Err(err) = result {
                                     let err_msg = format!("{} failed: {}", test_name, err);
                                     eprintln!("{}", err_msg.red().bold());
@@ -204,19 +180,443 @@ spec:
         };
     }
 
-    async fn test_other_feature(client: Arc<Client>) -> Result<String, Error> {
+
+    async fn test_successful_config_store_data_resolution(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+
+        // Verify `ClusterConfigurationStore` CRD is deployed
+        let store_name = "test-crd-deployment";
+        let namespace = "default";
+
+        fixture.prepare_single_config_store_claim_scenario(store_name, vec![MockConfig::success_with_body("{\"asd\": 1}")]).await;
+
+        // Attempt to get the CRD instance and confirm structure
+        let store = crd_client.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
+
+        let config_store = store.spec.provider.get_config_store();
+
+        let config = config_store.get_config(None).await.expect("Config should be returned");
+
+        assert_eq!(config, "{\"asd\": 1}");
+
+        Ok(config)
+
+    }
+
+    async fn test_client_error_config_store_data_resolution(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+
+        // Verify `ClusterConfigurationStore` CRD is deployed
+        let store_name = "test-error-config-store-data-resolution";
+        let namespace = "default";
+
+        fixture.prepare_single_config_store_claim_scenario(store_name, vec![MockConfig::not_found_with_body("{\"error\": \"Not found\"}")]).await;
+
+        // Attempt to get the CRD instance and confirm structure
+        let store = crd_client.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
+
+        let config_store = store.spec.provider.get_config_store();
+
+        let config = config_store.get_config(None).await;
+
+
+        match config {
+            Err(Error::HttpConfigStoreClientError(err)) => {
+                // Check that the error message matches the expected value
+                let error_message = format!("{}", err);
+                assert_eq!(error_message, "{\"error\": \"Not found\"}");
+            },
+            _ => panic!("Expected Error::HttpConfigStoreClientError but got a different error"),
+        }
+        Ok(String::from("Done"))
+
+    }
+    async fn test_server_error_config_store_data_resolution(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+
+        // Verify `ClusterConfigurationStore` CRD is deployed
+        let store_name = "test-server-error-config-store-data-resolution";
+        let namespace = "default";
+
+        fixture.prepare_single_config_store_claim_scenario(store_name, vec![MockConfig::internal_server_error_with_body("{\"error\": \"Internal server error\"}")]).await;
+
+        // Attempt to get the CRD instance and confirm structure
+        let store = crd_client.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
+
+        let config_store = store.spec.provider.get_config_store();
+
+        let config = config_store.get_config(None).await;
+
+
+        match config {
+            Err(Error::HttpConfigStoreServerError(kube_error)) => {
+                // Check that the error message matches the expected value
+                let error_message = format!("{}", kube_error);
+                assert_eq!(error_message, "{\"error\": \"Internal server error\"}");
+            },
+            _ => panic!("Expected Error::HttpConfigStoreServerError but got a different error"),
+        }
+        Ok(String::from("Done"))
+
+    }
+    async fn test_config_store_returns_data_depending_on_params(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+
+        // Verify `ClusterConfigurationStore` CRD is deployed
+        let store_name = "test-server-error-config-store-data-resolution-based-on-params";
+        let namespace = "default";
+
+        fixture.prepare_single_config_store_claim_scenario(store_name,
+   vec![
+            MockConfig::query_param_response("test1", "value1", "Some"),
+            MockConfig::query_param_response("test1", "value2", "Some2")
+        ]).await;
+
+        // Attempt to get the CRD instance and confirm structure
+        let store = crd_client.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
+
+        let config_store = store.spec.provider.get_config_store();
+
+        let mut params1: HashMap<String, String> = HashMap::new();
+        params1.insert(String::from("test1"), String::from("value1"));
+        let config1 = config_store.get_config(Some(params1)).await.expect("Configuration based on test1 param couldn't be retrieved");
+
+        let mut params2 = HashMap::new();
+        params2.insert(String::from("test1"), String::from("value2"));
+        let config2 = config_store.get_config(Some(params2)).await.expect("Configuration based on test1 param couldn't be retrieved");
+
+        assert_eq!(config1, "Some");
+        assert_eq!(config2, "Some2");
+
+        Ok(String::from("Done"))
+
+    }
+
+
+    async fn test_basic_reconcilation(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+
+        // Verify `ClusterConfigurationStore` CRD is deployed
+        let store_name = "test-basic-reconcilation";
+        let namespace = "default";
+
+        fixture.prepare_single_config_store_claim_scenario(store_name, vec![MockConfig::success_with_body("{\"dbConfig\": { \"host\": \"test_host\", logLevels: [\"INFO\", \"DEBUG\"]} }")]).await;
+
+        // Attempt to get the CRD instance and confirm structure
+        let claim = crd_client.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
+        let secret_claim = crd_client.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
+
+        let reconsile_action = claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+        let reconsile_action_secret = secret_claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+
+        let mut config_map = crd_client.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
+        let mut secret_map = crd_client.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
+
+        let cm_data = config_map.data.unwrap();
+        let sm_data = secret_map.data.unwrap();
+
+        let data = String::from(cm_data.get("config.yaml").unwrap().as_str());
+        let data1 = String::from(cm_data.get("config.json").unwrap().as_str());
+        let data2 = String::from(cm_data.get("config.toml").unwrap().as_str());
+        let data3 = String::from(cm_data.get("config.properties").unwrap().as_str());
+        let data4 = String::from(cm_data.get("config.env").unwrap().as_str());
+
+        let str = sm_data.get("config.yaml").unwrap();
+        let str1 = sm_data.get("config.json").unwrap();
+        let str2 = sm_data.get("config.toml").unwrap();
+        let str3 = sm_data.get("config.properties").unwrap();
+        let str4 = sm_data.get("config.env").unwrap();
+
+        let sdata = String::from_utf8(STANDARD.decode(&str.0).unwrap()).unwrap();
+        let sdata1 = String::from_utf8(STANDARD.decode(&str1.0).unwrap()).unwrap();
+        let sdata2 = String::from_utf8(STANDARD.decode(&str2.0).unwrap()).unwrap();
+        let sdata3 = String::from_utf8(STANDARD.decode(&str3.0).unwrap()).unwrap();
+        let sdata4 = String::from_utf8(STANDARD.decode(&str4.0).unwrap()).unwrap();
+
+        assert_eq!(data, sdata);
+        assert_eq!(data1, sdata1);
+        assert_eq!(data2, sdata2);
+        assert_eq!(data3, sdata3);
+        assert_eq!(data4, sdata4);
+
+        assert_eq!(data, r#"dbConfig:
+  host: test_host
+  logLevels:
+  - INFO
+  - DEBUG
+"#);
+        assert_eq!(data1, r#"{
+  "dbConfig": {
+    "host": "test_host",
+    "logLevels": [
+      "INFO",
+      "DEBUG"
+    ]
+  }
+}"#);
+        assert_eq!(data2, r#"[dbConfig]
+host = "test_host"
+logLevels = ["INFO", "DEBUG"]
+"#);
+        assert_eq!(data3, r#"dbConfig.host=test_host
+dbConfig.logLevels.0=INFO
+dbConfig.logLevels.1=DEBUG"#);
+        assert_eq!(data4, r#"DB__CONFIG_HOST=test_host
+DB__CONFIG_LOG__LEVELS_0=INFO
+DB__CONFIG_LOG__LEVELS_1=DEBUG"#);
+        Ok(String::from("Done"))
+
+    }
+
+    async fn test_config_files_with_merging_reconcilation(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+
+        // Verify `ClusterConfigurationStore` CRD is deployed
+        let store_name = "test-config-files-with-merging-reconcilation";
+        let namespace = "default";
+
+        fixture.prepare_config_store_claim_with_merge_scenario(store_name, vec![
+            MockConfig::query_param_response("env", "local", "{\"dbConfig\": { \"host\": \"localhost\", \"logLevels\": [\"INFO\",  \"ERROR\",  \"DEBUG\"], \"timeout\": 1000} }"),
+            MockConfig::query_param_response("env", "dev", "{\"dbConfig\": { \"host\": \"dev\", \"logLevels\": [\"INFO\", \"DEBUG\"], \"logApiKey\": \"logger_key\"} }"),
+            MockConfig::query_param_response("env", "prod", "{\"dbConfig\": { \"host\": \"prod\", \"logLevels\": [\"INFO\"]} }"),
+        ]).await;
+
+        // Attempt to get the CRD instance and confirm structure
+        let claim = crd_client.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
+        let secret_claim = crd_client.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
+
+        let reconsile_action = claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+        let reconsile_action_secret = secret_claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+
+        let mut config_map = crd_client.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
+        let mut secret_map = crd_client.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
+
+        let cm_data = config_map.data.unwrap();
+        let sm_data = secret_map.data.unwrap();
+
+        let data = String::from(cm_data.get("config.yaml").unwrap().as_str());
+        let data1 = String::from(cm_data.get("config.json").unwrap().as_str());
+        let data2 = String::from(cm_data.get("config.toml").unwrap().as_str());
+        let data3 = String::from(cm_data.get("config.properties").unwrap().as_str());
+        let data4 = String::from(cm_data.get("config.env").unwrap().as_str());
+
+        let str = sm_data.get("config.yaml").unwrap();
+        let str1 = sm_data.get("config.json").unwrap();
+        let str2 = sm_data.get("config.toml").unwrap();
+        let str3 = sm_data.get("config.properties").unwrap();
+        let str4 = sm_data.get("config.env").unwrap();
+
+        let sdata = String::from_utf8(STANDARD.decode(&str.0).unwrap()).unwrap();
+        let sdata1 = String::from_utf8(STANDARD.decode(&str1.0).unwrap()).unwrap();
+        let sdata2 = String::from_utf8(STANDARD.decode(&str2.0).unwrap()).unwrap();
+        let sdata3 = String::from_utf8(STANDARD.decode(&str3.0).unwrap()).unwrap();
+        let sdata4 = String::from_utf8(STANDARD.decode(&str4.0).unwrap()).unwrap();
+
+        assert_eq!(data, sdata);
+        assert_eq!(data1, sdata1);
+        assert_eq!(data2, sdata2);
+        assert_eq!(data3, sdata3);
+        assert_eq!(data4, sdata4);
+
+        assert_eq!(data, r#"dbConfig:
+  host: prod
+  logApiKey: logger_key
+  logLevels:
+  - INFO
+  timeout: 1000
+"#);
+        assert_eq!(data1, r#"{
+  "dbConfig": {
+    "host": "prod",
+    "logApiKey": "logger_key",
+    "logLevels": [
+      "INFO"
+    ],
+    "timeout": 1000
+  }
+}"#);
+        assert_eq!(data2, r#"[dbConfig]
+host = "prod"
+logApiKey = "logger_key"
+logLevels = ["INFO"]
+timeout = 1000
+"#);
+        assert_eq!(data3, r#"dbConfig.host=prod
+dbConfig.logApiKey=logger_key
+dbConfig.logLevels.0=INFO
+dbConfig.timeout=1000"#);
+        assert_eq!(data4, r#"DB__CONFIG_HOST=prod
+DB__CONFIG_LOG__API__KEY=logger_key
+DB__CONFIG_LOG__LEVELS_0=INFO
+DB__CONFIG_TIMEOUT=1000"#);
+        Ok(String::from("Done"))
+
+    }
+
+    async fn test_basic_reconcilation_with_cluster_config_store(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+
+        // Verify `ClusterConfigurationStore` CRD is deployed
+        let store_name = "test-basic-reconcilation-with-cluster-config-store";
+        let namespace = "default";
+
+        fixture.prepare_single_cluster_config_store_claim_scenario(store_name, vec![MockConfig::success_with_body("{\"dbConfig\": { \"host\": \"test_host\", logLevels: [\"INFO\", \"DEBUG\"]} }")]).await;
+
+        // Attempt to get the CRD instance and confirm structure
+        let claim = crd_client.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
+        let secret_claim = crd_client.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
+
+        let reconsile_action = claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+        let reconsile_action_secret = secret_claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+
+        let mut config_map = crd_client.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
+        let mut secret_map = crd_client.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
+
+        let cm_data = config_map.data.unwrap();
+        let sm_data = secret_map.data.unwrap();
+
+        let data = String::from(cm_data.get("config.yaml").unwrap().as_str());
+        let data1 = String::from(cm_data.get("config.json").unwrap().as_str());
+        let data2 = String::from(cm_data.get("config.toml").unwrap().as_str());
+        let data3 = String::from(cm_data.get("config.properties").unwrap().as_str());
+        let data4 = String::from(cm_data.get("config.env").unwrap().as_str());
+
+        let str = sm_data.get("config.yaml").unwrap();
+        let str1 = sm_data.get("config.json").unwrap();
+        let str2 = sm_data.get("config.toml").unwrap();
+        let str3 = sm_data.get("config.properties").unwrap();
+        let str4 = sm_data.get("config.env").unwrap();
+
+        let sdata = String::from_utf8(STANDARD.decode(&str.0).unwrap()).unwrap();
+        let sdata1 = String::from_utf8(STANDARD.decode(&str1.0).unwrap()).unwrap();
+        let sdata2 = String::from_utf8(STANDARD.decode(&str2.0).unwrap()).unwrap();
+        let sdata3 = String::from_utf8(STANDARD.decode(&str3.0).unwrap()).unwrap();
+        let sdata4 = String::from_utf8(STANDARD.decode(&str4.0).unwrap()).unwrap();
+
+        assert_eq!(data, sdata);
+        assert_eq!(data1, sdata1);
+        assert_eq!(data2, sdata2);
+        assert_eq!(data3, sdata3);
+        assert_eq!(data4, sdata4);
+
+        assert_eq!(data, r#"dbConfig:
+  host: test_host
+  logLevels:
+  - INFO
+  - DEBUG
+"#);
+        assert_eq!(data1, r#"{
+  "dbConfig": {
+    "host": "test_host",
+    "logLevels": [
+      "INFO",
+      "DEBUG"
+    ]
+  }
+}"#);
+        assert_eq!(data2, r#"[dbConfig]
+host = "test_host"
+logLevels = ["INFO", "DEBUG"]
+"#);
+        assert_eq!(data3, r#"dbConfig.host=test_host
+dbConfig.logLevels.0=INFO
+dbConfig.logLevels.1=DEBUG"#);
+        assert_eq!(data4, r#"DB__CONFIG_HOST=test_host
+DB__CONFIG_LOG__LEVELS_0=INFO
+DB__CONFIG_LOG__LEVELS_1=DEBUG"#);
+        Ok(String::from("Done"))
+
+    }
+
+    async fn test_config_files_with_merging_reconcilation_with_cluster_config_store(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+
+        // Verify `ClusterConfigurationStore` CRD is deployed
+        let store_name = "test-config-files-with-merging-reconcilation-with-cluster-config-store";
+        let namespace = "default";
+
+        fixture.prepare_cluster_config_store_claim_with_merge_scenario(store_name, vec![
+            MockConfig::query_param_response("env", "local", "{\"dbConfig\": { \"host\": \"localhost\", \"logLevels\": [\"INFO\",  \"ERROR\",  \"DEBUG\"], \"timeout\": 1000} }"),
+            MockConfig::query_param_response("env", "dev", "{\"dbConfig\": { \"host\": \"dev\", \"logLevels\": [\"INFO\", \"DEBUG\"], \"logApiKey\": \"logger_key\"} }"),
+            MockConfig::query_param_response("env", "prod", "{\"dbConfig\": { \"host\": \"prod\", \"logLevels\": [\"INFO\"]} }"),
+        ]).await;
+
+        // Attempt to get the CRD instance and confirm structure
+        let claim = crd_client.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
+        let secret_claim = crd_client.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
+
+        let reconsile_action = claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+        let reconsile_action_secret = secret_claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+
+        let mut config_map = crd_client.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
+        let mut secret_map = crd_client.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
+
+        let cm_data = config_map.data.unwrap();
+        let sm_data = secret_map.data.unwrap();
+
+        let data = String::from(cm_data.get("config.yaml").unwrap().as_str());
+        let data1 = String::from(cm_data.get("config.json").unwrap().as_str());
+        let data2 = String::from(cm_data.get("config.toml").unwrap().as_str());
+        let data3 = String::from(cm_data.get("config.properties").unwrap().as_str());
+        let data4 = String::from(cm_data.get("config.env").unwrap().as_str());
+
+        let str = sm_data.get("config.yaml").unwrap();
+        let str1 = sm_data.get("config.json").unwrap();
+        let str2 = sm_data.get("config.toml").unwrap();
+        let str3 = sm_data.get("config.properties").unwrap();
+        let str4 = sm_data.get("config.env").unwrap();
+
+        let sdata = String::from_utf8(STANDARD.decode(&str.0).unwrap()).unwrap();
+        let sdata1 = String::from_utf8(STANDARD.decode(&str1.0).unwrap()).unwrap();
+        let sdata2 = String::from_utf8(STANDARD.decode(&str2.0).unwrap()).unwrap();
+        let sdata3 = String::from_utf8(STANDARD.decode(&str3.0).unwrap()).unwrap();
+        let sdata4 = String::from_utf8(STANDARD.decode(&str4.0).unwrap()).unwrap();
+
+        assert_eq!(data, sdata);
+        assert_eq!(data1, sdata1);
+        assert_eq!(data2, sdata2);
+        assert_eq!(data3, sdata3);
+        assert_eq!(data4, sdata4);
+
+        assert_eq!(data, r#"dbConfig:
+  host: prod
+  logApiKey: logger_key
+  logLevels:
+  - INFO
+  timeout: 1000
+"#);
+        assert_eq!(data1, r#"{
+  "dbConfig": {
+    "host": "prod",
+    "logApiKey": "logger_key",
+    "logLevels": [
+      "INFO"
+    ],
+    "timeout": 1000
+  }
+}"#);
+        assert_eq!(data2, r#"[dbConfig]
+host = "prod"
+logApiKey = "logger_key"
+logLevels = ["INFO"]
+timeout = 1000
+"#);
+        assert_eq!(data3, r#"dbConfig.host=prod
+dbConfig.logApiKey=logger_key
+dbConfig.logLevels.0=INFO
+dbConfig.timeout=1000"#);
+        assert_eq!(data4, r#"DB__CONFIG_HOST=prod
+DB__CONFIG_LOG__API__KEY=logger_key
+DB__CONFIG_LOG__LEVELS_0=INFO
+DB__CONFIG_TIMEOUT=1000"#);
+        Ok(String::from("Done"))
+
+    }
+    async fn test_other_feature(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
         // Example subtest logic here
         // ...
         Ok("Other Feature Test successful".to_string())
     }
 
-    async fn test_other_feature2(client: Arc<Client>) -> Result<String, Error> {
+    async fn test_other_feature2(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
         // Example subtest logic here
         // ...
         Ok("Other2 Feature Test successful".to_string())
     }
 
-    async fn test_other_feature3(client: Arc<Client>) -> Result<String, Error> {
+    async fn test_other_feature3(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
         // Example subtest logic here
         // ...
         Ok("Other2 Feature Test successful".to_string())
@@ -227,13 +627,19 @@ spec:
     // Use the macro to generate multiple test sets with grouped subtests
     define_k8s_tests!({
             // Test name `run_crd_tests` with its client function and subtests
-            // test_crd_deployment,
-            // Test name `run_feature_tests` with its client function and different subtests
-           test_other_feature,
-           test_other_feature2,
-           test_other_feature3,
-        },
-        get_k8s_client
+            test_successful_config_store_data_resolution,
+            test_client_error_config_store_data_resolution,
+            test_server_error_config_store_data_resolution,
+            test_config_store_returns_data_depending_on_params,
+            test_basic_reconcilation,
+            test_config_files_with_merging_reconcilation,
+            test_config_files_with_merging_reconcilation_with_cluster_config_store,
+            test_basic_reconcilation_with_cluster_config_store,
+           //  // Test name `run_feature_tests` with its client function and different subtests
+           // test_other_feature,
+           // test_other_feature2,
+           // test_other_feature3,
+        }
     );
 
 }

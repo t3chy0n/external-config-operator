@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
+use async_trait::async_trait;
 use k8s_openapi::api::core::v1::ConfigMap;
 use k8s_openapi::NamespaceResourceScope;
 use kube::{
@@ -21,7 +22,7 @@ use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomRe
 use kube::api::ApiResource;
 use serde_yaml::Value;
 use tracing::{error, info};
-use crate::contract::ireconcilable::IReconcilable;
+use crate::contract::ireconcilable::{ControllerReconcilableTargetTypeBounds, IReconcilable};
 use crate::contract::lib::Error;
 use crate::controller::utils::context::Data;
 use crate::contract::lib::Result;
@@ -32,9 +33,9 @@ use crate::controller::v1alpha1::crd::configuration_store::{ClusterConfiguration
 // #[instrument(skip(ctx, doc), fields(trace_id))]
 pub static DOCUMENT_FINALIZER: &str = "test.io/documents.kube3.rs";
 
-async fn reconcile<T >(resource: Arc<T>, ctx: Arc<Data>) -> Result<Action>
+pub async fn reconcile<T >(resource: Arc<T>, ctx: Arc<Data>) -> Result<Action>
 where
-    T: Resource<Scope = NamespaceResourceScope, DynamicType = ()> + ResourceExt + IReconcilable  + Send + Sync + Clone + Serialize + Debug + DeserializeOwned + 'static
+    T: ControllerReconcilableTargetTypeBounds
 {
     // let trace_id = telemetry::get_trace_id();
     // Span::current().record("trace_id", &field::display(&trace_id));
@@ -56,7 +57,7 @@ where
 
 pub fn error_policy<T>(resource: Arc<T>, error: &Error, _ctx: Arc<Data>) -> Action
 where
-    T: Resource<Scope = NamespaceResourceScope, DynamicType = ()> + ResourceExt + IReconcilable  + Send + Sync + Clone + Serialize + Debug + DeserializeOwned + 'static
+    T: ControllerReconcilableTargetTypeBounds
 {
 
     error!("Error reconciling: {:?}", error);
@@ -67,7 +68,7 @@ where
 
 pub async fn run<T: Resource + IReconcilable>(data: Data)
 where
-    T: Resource<Scope = NamespaceResourceScope, DynamicType = ()> + ResourceExt + IReconcilable  + Send + Sync + Clone + Serialize + Debug + DeserializeOwned + 'static
+    T: ControllerReconcilableTargetTypeBounds
 {
     let api: Api<T> = Api::all((*data.client).clone());
 
@@ -93,13 +94,10 @@ where
 
 
 
-async fn apply_crd(client: &Client, crd: &CustomResourceDefinition) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let crd_yaml = serde_yaml::to_string(&crd)?;
-    println!("{crd_yaml}");
-    println!("---");
+async fn apply_crd(client: Arc<Client>, crd: &CustomResourceDefinition) -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     // Define the Kubernetes API endpoint for CRDs
-    let crd_api: Api<CustomResourceDefinition> = Api::all(client.clone());
+    let crd_api: Api<CustomResourceDefinition> = Api::all((*client).clone());
 
     // Apply the CRD
     match crd_api.create(&PostParams::default(), crd).await {
@@ -116,16 +114,23 @@ async fn apply_crd(client: &Client, crd: &CustomResourceDefinition) -> std::resu
 
 
 
-pub async fn apply_all_crds(client: &Client) -> std::result::Result<(), Box<dyn std::error::Error>> {
+pub async fn apply_all_crds(client: Arc<Client>) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let crds:Vec<CustomResourceDefinition> = crate::controller::v1alpha1::controller::crds();
         // .extend(); TODO: For new versions extend this
     for crd in crds.iter() {
-        apply_crd(&client, crd).await?;
+        apply_crd(client.clone(), crd).await?;
     }
 
     Ok(())
 }
 
+fn is_namespaced(kind: &str) -> bool {
+    // Specify cluster-scoped resource kinds here
+    match kind {
+        "Node" | "Namespace" | "ClusterRole" | "ClusterRoleBinding" | "PersistentVolume" | "ClusterConfigurationStore" => false,
+        _ => true,
+    }
+}
 /// Utility function to deploy a CRD from a YAML file
 pub async fn apply_from_yaml(client: Arc<Client>, manifest_yaml: &str) -> Result<(), Box<dyn std::error::Error>> {
 
@@ -137,7 +142,11 @@ pub async fn apply_from_yaml(client: Arc<Client>, manifest_yaml: &str) -> Result
     let kind = manifest.get("kind").and_then(|v| v.as_str()).ok_or("Missing kind")?.to_string();
     let metadata = manifest.get("metadata").ok_or("Missing metadata")?;
     let namespace = metadata.get("namespace").and_then(|v| v.as_str()).unwrap_or("default").to_string();
-
+    let namespace = if is_namespaced(&kind) {
+        metadata.get("namespace").and_then(|v| v.as_str()).unwrap_or("default").to_string()
+    } else {
+        String::new() // Empty string for cluster-scoped resources
+    };
     // Create a DynamicObject with GroupVersionKind
     // Split apiVersion into group and version
     let parts: Vec<&str> = api_version.split('/').collect();
@@ -151,10 +160,15 @@ pub async fn apply_from_yaml(client: Arc<Client>, manifest_yaml: &str) -> Result
     // Create a GroupVersionKind with group, version, and kind
     let gvk = GroupVersionKind::gvk(group, version, kind.as_str());
     let api_resource = ApiResource::from_gvk(&gvk);
-    let dynamic_api: Api<DynamicObject> = Api::namespaced_with((*client).clone(), namespace.as_str(), &api_resource);
+    let dynamic_api: Api<DynamicObject> = if namespace.is_empty() {
+        Api::all_with((*client).clone(), &api_resource) // Cluster-scoped
+    } else {
+        Api::namespaced_with((*client).clone(), &namespace, &api_resource) // Namespaced
+    };
 
     // Convert manifest into DynamicObject and apply it
     let dynamic_object: DynamicObject = serde_yaml::from_value(manifest)?;
+
     match dynamic_api.create(&PostParams::default(), &dynamic_object).await {
         Ok(created) => {
             println!("Successfully deployed {}: {}", kind, created.name_any());

@@ -27,6 +27,12 @@ pub enum Error {
     #[error("Http Store Error: {0} ")]
     HttpConfigStoreError( #[source] reqwest::Error),
 
+    #[error("Http Store Client Error: {0} ")]
+    HttpConfigStoreClientError(#[source] std::io::Error),
+
+    #[error("Http Store Server Error: {0} ")]
+    HttpConfigStoreServerError(#[source] std::io::Error),
+
     #[error("Kube Error: {0}")]
     KubeError(#[source] kube::Error),
 

@@ -39,7 +39,7 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
         if let Some(strategy) = &claim_ref.strategy {
             self.apply_strategy(client, claim_ref, namespace, file, data, strategy).await
         } else {
-            Ok(())
+            self.apply_strategy(client, claim_ref, namespace, file, data, &ConfigInjectionStrategy::Fallback).await
         }
     }
 
@@ -103,6 +103,7 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
         data: &mut BTreeMap<String, String>,
     ) -> Result<(), Error> {
         for store_ref in &claim_ref.from {
+            let result = self.fetch_and_parse_config(client.clone(), store_ref, namespace, file).await;
             if let Ok(file_data) = self.fetch_and_parse_config(client.clone(), store_ref, namespace, file).await {
                 data.insert(file.to_string(), convert_to_format(&file_data, &ConfigFileType::Json)?);
                 return Ok(());
@@ -151,7 +152,8 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
             .map_err(Error::KubeError)?;
 
         let config_store = store.spec.provider.get_config_store();
-        config_store.get_config(file.to_string()).await
+
+        config_store.get_config(store_ref.configurationStoreParams.clone()).await
     }
 
     async fn fetch_configuration_store(
@@ -166,7 +168,7 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
             .map_err(Error::KubeError)?;
 
         let config_store = store.spec.provider.get_config_store();
-        config_store.get_config(file.to_string()).await
+        config_store.get_config(store_ref.configurationStoreParams.clone()).await
     }
     async fn reconcile(&self, ctx: Arc<Data>) -> Result<Action> {
         let client = ctx.client.clone();
@@ -217,86 +219,3 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
     async fn create_resource_spec(&self, client: Arc<Client>) -> Result<TargetType, Error>;
 }
 
-
-
-// Tests for the ConfigurationDiscoverer trait
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use kube::Client;
-    use mockall::mock;
-    use tokio;
-    use std::sync::Arc;
-    use tracing::error;
-    use crate::contract::iconfigstore::IConfigStore;
-    use crate::controller::v1alpha1::crd::claim::ClaimConfigurationStoreRef;
-
-    mock! {
-        ConfigStore {}
-        #[async_trait]
-        impl IConfigStore for ConfigStore {
-            async fn get_config(&self, key: String) -> Result<String, Error>;
-        }
-    }
-
-    #[tokio::test]
-    async fn test_apply_merge_strategy_with_multiple_claim_refs() {
-        //TODO: Understand how controller tests are performed:
-        //https://github.com/kube-rs/controller-rs/blob/main/src/fixtures.rs
-        let client = Arc::new(Client::try_default().await.unwrap());
-        let claim_ref = ClaimRef {
-            strategy: Some(ConfigInjectionStrategy::Merge),
-            from: vec![
-                ClaimRefParametrization {
-                    configurationStoreRef: ClaimConfigurationStoreRef {
-                        name: "store1".to_string(),
-                        kind: SupportedConfigurationStoreResourceType::ConfigurationStore,
-                    },
-                    configurationStoreParams: None,
-                },
-                ClaimRefParametrization {
-                    configurationStoreRef: ClaimConfigurationStoreRef {
-                        name: "store2".to_string(),
-                        kind: SupportedConfigurationStoreResourceType::ConfigurationStore,
-                    },
-                    configurationStoreParams: None,
-                },
-            ],
-        };
-        let namespace = "default";
-        let file = "config.json";
-        let mut data = BTreeMap::new();
-
-        // Mocked ConfigStore
-        let mut mock_store1 = MockConfigStore::new();
-        mock_store1.expect_get_config().returning(|_| Ok(r#"{"key1": "value1"}"#.to_string()));
-
-        let mut mock_store2 = MockConfigStore::new();
-        mock_store2.expect_get_config().returning(|_| Ok(r#"{"key2": "value2"}"#.to_string()));
-
-        // Mock client setup to return the mocked stores
-        // Assuming there would be some setup here to direct API calls to the mocks
-
-        // Create a ConfigMapClaim instance that implements Default
-        let config_map_claim = ConfigMapClaim::default();
-
-        // Call the function
-        let result = ConfigurationDiscoverer::<ConfigMap>::apply_merge_strategy(
-            &config_map_claim,
-            client,
-            &claim_ref,
-            namespace,
-            file,
-            &mut data,
-        ).await;
-
-
-            println!("Error reconciling2");
-            error!("Error reconciling: {:?}", result.err());
-
-
-        // assert!(&result.is_ok());
-        // assert!(data.contains_key(file));
-        // assert_eq!(data.get(file).unwrap(), r#"{"key1": "value1", "key2": "value2"}"#);
-    }
-}

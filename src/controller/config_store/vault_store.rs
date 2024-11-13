@@ -20,7 +20,7 @@ impl VaultConfigStore {
 }
 #[async_trait]
 impl IConfigStore for VaultConfigStore {
-    async fn get_config(&self, key: String) -> Result<String, Error> {
+    async fn get_config(&self, query_params: Option<HashMap<String, String>>) -> Result<String, Error> {
         // HTTP client logic (could use reqwest, etc.)
 
         println!("Fetching config from HTTP at {}", self.config.url );

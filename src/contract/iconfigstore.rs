@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use async_trait::async_trait;
 use crate::contract::lib::Error;
 
@@ -5,6 +6,6 @@ use crate::contract::lib::Error;
 pub trait IConfigStore: Send + Sync {
 
 
-    async fn get_config(&self, key: String) -> Result<String, Error>;
+    async fn get_config(&self, query_params: Option<HashMap<String, String>>) -> Result<String, Error>;
 }
 
