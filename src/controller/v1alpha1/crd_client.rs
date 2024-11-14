@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use kube::api::{ListParams, ObjectList};
 use kube::{Api, Client, Resource};
-use crate::contract::clients::{ICrdClient, K8sClientAware};
+use crate::contract::clients::{ICrdClient, K8sClient, K8sClientAware};
 use crate::controller::v1alpha1::controller::{ClusterConfigurationStore, ConfigMapClaim, ConfigurationStore, SecretClaim};
 use crate::contract::lib::Error;
 
@@ -22,6 +22,8 @@ impl K8sClientAware for CrdClient {
         self.client.clone()
     }
 }
+impl K8sClient for CrdClient {}
+
 impl ICrdClient<
     ConfigurationStore,
     ClusterConfigurationStore,

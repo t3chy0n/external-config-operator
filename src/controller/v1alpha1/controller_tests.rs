@@ -38,6 +38,7 @@ mod tests {
     use base64::engine::general_purpose::STANDARD;
     use k8s_openapi::ByteString;
     use crate::contract::clients::ICrdClient;
+    use crate::contract::clients::K8sClient;
 
     // Global array of Kubernetes versions
     const K8S_VERSIONS: &[&str] = &[
@@ -130,12 +131,13 @@ mod tests {
                         $(
                             // Run each subtest as an async block
                             let test_name = format!("{} - {}", stringify!($subtest), version);
-                            let crd_client = CrdClient::new(client.clone());
+                            let crd_client = Arc::new(CrdClient::new(client.clone()));
                             let mut fixture = ControllerFixtures::new(client.clone()).await;
 
                             let context = Arc::new(Data{
                                 client: client.clone(),
-                                v1alpha1: Arc::new(crd_client)
+                                v1alpha1: crd_client.clone(),
+                                api_client: crd_client.clone()
                             });
                             let cloned_client = client.clone();
                             tasks.push(tokio::task::spawn(async move {

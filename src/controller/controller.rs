@@ -35,7 +35,8 @@ pub static DOCUMENT_FINALIZER: &str = "test.io/documents.kube3.rs";
 
 pub async fn reconcile<T >(resource: Arc<T>, ctx: Arc<Data>) -> Result<Action>
 where
-    T: ControllerReconcilableTargetTypeBounds
+    T: ControllerReconcilableTargetTypeBounds,
+    Data: Send + Sync,
 {
     // let trace_id = telemetry::get_trace_id();
     // Span::current().record("trace_id", &field::display(&trace_id));

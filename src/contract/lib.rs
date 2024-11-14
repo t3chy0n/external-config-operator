@@ -42,6 +42,12 @@ pub enum Error {
     #[error("Unsupported configuration file format")]
     UnsupportedFileType(),
 
+    #[error("Another pod holds the lease")]
+    LeaseHeldByAnotherPod(),
+    
+    #[error("Operation was cancelled")]
+    Cancelled,
+
     #[error("Incompatible file formats")]
     IncompatibleFileTypes(),
 

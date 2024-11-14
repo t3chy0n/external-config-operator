@@ -38,6 +38,7 @@ dtor = "0.0.0"
 colored = "2.1.0"
 log = "0.4.22"
 tokio-util = "0.7.12"
+either = "1.13.0"
 
 
 [[bin]]

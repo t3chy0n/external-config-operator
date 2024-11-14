@@ -12,6 +12,7 @@ use tokio::sync::{mpsc, Notify};
 use tokio_util::sync::CancellationToken;
 use controller::utils::context::Data;
 use crate::controller::leader_election::leader_election::LeaderElection;
+use crate::controller::utils::signals::notify_cancellation_token;
 use crate::controller::v1alpha1;
 use crate::controller::v1alpha1::crd_client::CrdClient;
 
@@ -27,72 +28,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let token = Arc::new(CancellationToken::new());
-    let (shutdown_send, mut shutdown_recv) = mpsc::unbounded_channel::<()>();
-
+    notify_cancellation_token(&token);
 
     let client = Client::try_default().await.expect("failed to create kube Client");
     let c = Arc::new(client);
-    let leader_elector = LeaderElection::new(token.clone(), c.clone());
 
 
     let data = Data {
         client: c.clone(),
-        v1alpha1: Arc::new(v1alpha1::crd_client::CrdClient::new(c)),
+        v1alpha1: Arc::new(v1alpha1::crd_client::CrdClient::new(c.clone())),
+        api_client: Arc::new(v1alpha1::crd_client::CrdClient::new(c.clone())),
     };
 
-    tokio::spawn({
-        let token = token.clone();
-
-        async move {
-            //TODO: Unlikely it will run on windows node, but for that case its unsafe
-            let mut sigterm = signal(SignalKind::terminate()).unwrap();
-
-            tokio::select! {
-                _ = signal::ctrl_c() => {
-                   info!("Received ctrl+C, initiating graceful shutdown.");
-                },
-                _ = sigterm.recv() => {
-                    info!("Received SIGTERM, initiating graceful shutdown.");
-                },
-                _ = shutdown_recv.recv() => {
-                    info!("Received shutdown signal, initiating graceful shutdown.");
-                }
-            }
-
-
-            token.cancel();
-        }
-    });
+    let leader_elector = Arc::new(
+        LeaderElection::new(token.clone(), Arc::new(data.clone()))
+    );
 
     let lease = leader_elector.claim_leadership_loop().await;
-    let lease_refresh_task = tokio::task::spawn({
-        let token = token.clone();
-        async move {
-            match lease {
-                Ok(has_lease) => {
-                    if let Some(lease) = has_lease {
-
-                        leader_elector.refresh_leadership_loop(lease).await;
-
-                    } else {
-                        info!("No lease to keep refreshing");
-                    }
-                }
-                Err(e) => {
-                    info!("There was an error when fetching the lease {:?}", e);
-                }
-            }
-        }
-    });
-
+    if let Ok(Some(lease)) = lease {
+        tokio::spawn(async move {
+            leader_elector.refresh_leadership_loop(lease).await;
+        });
+    } else {
+        info!("No k8s env variables set. Startus controller...");
+    }
 
     //Wait for a moment in case close signal was passed.
     let mut interval = tokio::time::interval(Duration::from_secs(3));
     tokio::select! {
         _ = interval.tick() => {
             join![
-                controller::v1alpha1::controller::run(data.clone()),
-                lease_refresh_task
+                v1alpha1::controller::run(data.clone()),
             ];
         },
         _ = token.cancelled() => {
