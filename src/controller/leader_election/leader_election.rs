@@ -8,10 +8,12 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::{MicroTime, OwnerReference};
 use kube::{Api, Client};
 use kube::api::{Patch, PatchParams, PostParams};
 use kube::runtime::finalizer::Error;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use serde_json::json;
+use tokio_util::sync::CancellationToken;
 
 pub struct LeaderElection {
+    cancel_token: Arc<CancellationToken>,
     client: Arc<Client>,
     lease_api: Api<Lease>,
     pod_api: Api<k8s_openapi::api::core::v1::Pod>,
@@ -20,12 +22,13 @@ pub struct LeaderElection {
 static CONTROLLER_LEASE_NAME: &str = "external-config-operator-leader-election";
 
 impl LeaderElection {
-    pub fn new(client: Arc<Client>) -> Self {
+    pub fn new(cancel_token: Arc<CancellationToken>, client: Arc<Client>) -> Self {
         let namespace = env::var("KUBERNETES_NAMESPACE").unwrap_or_else(|_| "default".to_string());
         let lease_api: Api<Lease> = Api::namespaced((*client).clone(), namespace.as_str());
         let pod_api: Api<k8s_openapi::api::core::v1::Pod> = Api::namespaced((*client).clone(), &namespace);
 
         LeaderElection {
+            cancel_token,
             client,
             lease_api,
             pod_api
@@ -65,30 +68,7 @@ impl LeaderElection {
                     }),
                 };
 
-                // Try to acquire the lease (first instance to do so becomes the leader)
-                match self.lease_api.create(&PostParams::default(), &lease).await {
-                    Ok(lease) => {
-                        match self.is_owner_of_lease().await {
-                            Ok(is_owner) => {
-                                if is_owner {
-                                    info!("Acquired leadership with lease: {}", CONTROLLER_LEASE_NAME);
-                                    return Ok(Some(lease))
-                                }
-                                panic!("Pod is not owner of a lease")
-
-                            }
-                            Err(e) => {
-                                warn!("Failed to acquire lease (another controller might be the leader): {:?}", e);
-                                Err(e)
-                            }
-                        }
-
-                    }
-                    Err(e) => {
-                        warn!("Failed to acquire lease (another controller might be the leader): {:?}", e);
-                        Err(e)
-                    }
-                }
+                self.try_create_lease(&mut lease).await
             },
             Err(e) => {
                 warn!("Failed to configure leader election (is KUBERNETES_POD_NAME and KUBERNETES_NAMESPACE env variables defined?): {:?}", e);
@@ -98,50 +78,64 @@ impl LeaderElection {
 
     }
 
-    pub async fn claim_leadership_loop(&self) -> Result<Option<Lease>, kube::Error> {
-        loop {
-            let result = self.try_claim_leadership().await;
-            match result {
-                Ok(_) => return result,
-                Err(_) =>{
-                    sleep(Duration::from_secs(10));
-                    continue
-
-                }
-            }
-        }
-    }
-
-    async fn is_owner_of_lease(&self) -> Result<bool, kube::Error> {
-
+    async fn try_create_lease(&self, lease: &mut Lease) -> Result<Option<Lease>, kube::Error> {
+        // Try to acquire the lease (first instance to do so becomes the leader)
+        self.lease_api.create(&PostParams::default(), &lease).await?;
         let pod_identity = env::var("KUBERNETES_POD_NAME").expect("KUBERNETES_POD_NAME variable should be set, when leader election is enabled");
-        let patch = json!({
-            "spec": {
-                "holderIdentity": pod_identity,
-                "renewTime": Utc::now()
-            }
-        });
 
         match self.lease_api
             .get(&CONTROLLER_LEASE_NAME)
             .await {
             Ok(lease) => {
-                Ok(lease.spec.unwrap().holder_identity.unwrap() == pod_identity)
-            },
+                let default_lease_spec = LeaseSpec::default();
+                let default_holder = String::from("");
+                let holder = lease.spec.as_ref().unwrap_or(&default_lease_spec).holder_identity.as_ref().unwrap_or(&default_holder);
+                if holder == &pod_identity {
+                    info!("Acquired leadership with lease: {}", CONTROLLER_LEASE_NAME);
+                    return Ok(Some(lease))
+                }
+                panic!("Pod is not owner of a lease")
+            }
             Err(e) => {
+                warn!("Failed to acquire lease (another controller might be the leader): {:?}", e);
                 Err(e)
             }
         }
 
     }
 
+
+
+    pub async fn claim_leadership_loop(&self) -> Result<Option<Lease>, kube::Error> {
+        info!("Trying to acquire lease...");
+        loop {
+            tokio::select! {
+                result =  self.try_claim_leadership() => {
+                    match result {
+                        Ok(_) => return result,
+                        Err(e) =>{
+                            sleep(Duration::from_secs(10));
+                            debug!("Error when acquiring lease... {:?}", e);
+                            continue
+
+                        }
+                    }
+                },
+                _ = self.cancel_token.cancelled() => {
+                    info!("Shutdown signal received. Stopping lease refresh.");
+                    break Ok(None);
+                },
+            }
+
+        }
+    }
     pub async fn refresh_leadership_loop(&self, lease: Lease) {
         let mut interval = tokio::time::interval(Duration::from_secs(10));
         let namespace = env::var("KUBERNETES_NAMESPACE").unwrap_or_else(|_| "default".to_string());
         let pod_identity = env::var("KUBERNETES_POD_NAME");
 
         let lease_api: Api<Lease> = Api::namespaced((*self.client).clone(), namespace.as_str());
-
+        let exit_signal = tokio::signal::ctrl_c();
         match pod_identity {
             Ok(pod_name) => {
                 loop {
@@ -166,12 +160,11 @@ impl LeaderElection {
                                 Err(e) => {
                                     error!("Failed to renew lease: {:?}", e);
 
-                                    tokio::signal::ctrl_c().await;
                                     break;
                                 }
                             }
                         },
-                        _ = tokio::signal::ctrl_c() => {
+                        _ = self.cancel_token.cancelled() => {
                             info!("Shutdown signal received. Stopping lease refresh.");
                             break;
                         },

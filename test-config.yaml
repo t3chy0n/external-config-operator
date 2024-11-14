@@ -27,12 +27,12 @@ spec:
   data:
     config.yaml:
       from:
-        - configurationStoreRef:
-            kind: ConfigurationStore
-            name: test-external-source-yaml
-          configurationStoreParams:
-            testParam1: asd
-            testParam2: asd
+#        - configurationStoreRef:
+#            kind: ConfigurationStore
+#            name: test-external-source-yaml
+#          configurationStoreParams:
+#            testParam1: asd
+#            testParam2: asd
 
         - configurationStoreRef:
             kind: ConfigurationStore
@@ -41,19 +41,19 @@ spec:
             testParam1: asd
             testParam2: asd
 
-        - configurationStoreRef:
-            kind: ConfigurationStore
-            name: test-external-source-properties
-          configurationStoreParams:
-            testParam1: asd
-            testParam2: asd
-
-        - configurationStoreRef:
-            kind: ConfigurationStore
-            name: test-external-source
-          configurationStoreParams:
-            testParam1: asd
-            testParam2: asd
+#        - configurationStoreRef:
+#            kind: ConfigurationStore
+#            name: test-external-source-properties
+#          configurationStoreParams:
+#            testParam1: asd
+#            testParam2: asd
+#
+#        - configurationStoreRef:
+#            kind: ConfigurationStore
+#            name: test-external-source
+#          configurationStoreParams:
+#            testParam1: asd
+#            testParam2: asd
       strategy: Merge
 
 #    config2.yaml:
@@ -169,7 +169,7 @@ metadata:
 spec:
   provider:
     http:
-      url: https://raw.githubusercontent.com/platformsh-templates/laravel/refs/heads/master/.env.example
+      url: https://pastebin.com/raw/5yvAhSRG
 
 ---
 apiVersion: external-config.com/v1alpha1

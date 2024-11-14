@@ -299,7 +299,9 @@ impl IReconcilable for SecretClaim {
         let client = ctx.client.clone();
         match ConfigurationDiscoverer::<Secret>::reconcile(self, ctx).await {
             Ok(action) => Ok(action),
-            Err(e) => { Err(e)
+            Err(e) => {
+                self.record_event(client, "Reconcile", &e.to_string(), EventType::Warning).await?;
+                Err(e)
             }
         }
     }

@@ -37,6 +37,7 @@ ctor = "0.2.8"
 dtor = "0.0.0"
 colored = "2.1.0"
 log = "0.4.22"
+tokio-util = "0.7.12"
 
 
 [[bin]]
