@@ -12,6 +12,8 @@ use tokio::sync::{mpsc, Notify};
 use tokio_util::sync::CancellationToken;
 use controller::utils::context::Data;
 use crate::controller::leader_election::leader_election::LeaderElection;
+use crate::controller::v1alpha1;
+use crate::controller::v1alpha1::crd_client::CrdClient;
 
 mod controller;
 mod contract;
@@ -35,6 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let data = Data {
         client: c.clone(),
+        v1alpha1: Arc::new(v1alpha1::crd_client::CrdClient::new(c)),
     };
 
     tokio::spawn({

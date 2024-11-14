@@ -13,6 +13,7 @@ mod tests {
     use crate::contract::lib::Error;
     use crate::controller::v1alpha1::crd::claim::{ClaimConfigurationStoreRef, SupportedConfigurationStoreResourceType};
     use crate::controller::v1alpha1::crd::configuration_store::ClusterConfigurationStore;
+    use crate::contract::clients::K8sClientAware;
 
     //Workaround to log from test run
     #[cfg(not(test))]
@@ -32,10 +33,11 @@ mod tests {
     use crate::controller::controller::{apply_all_crds, apply_from_yaml, reconcile};
     use crate::controller::utils::context::Data;
     use crate::controller::v1alpha1::controller::{ConfigMapClaim, ConfigurationStore};
-    use crate::controller::v1alpha1::crd_client::CrdClient;
+    use crate::controller::v1alpha1::crd_client::{CrdClient};
     use crate::controller::v1alpha1::fixtures::tests::{ControllerFixtures, MockConfig};
     use base64::engine::general_purpose::STANDARD;
     use k8s_openapi::ByteString;
+    use crate::contract::clients::ICrdClient;
 
     // Global array of Kubernetes versions
     const K8S_VERSIONS: &[&str] = &[
@@ -131,11 +133,15 @@ mod tests {
                             let crd_client = CrdClient::new(client.clone());
                             let mut fixture = ControllerFixtures::new(client.clone()).await;
 
+                            let context = Arc::new(Data{
+                                client: client.clone(),
+                                v1alpha1: Arc::new(crd_client)
+                            });
                             let cloned_client = client.clone();
                             tasks.push(tokio::task::spawn(async move {
                                 info!("{}", format!("Running {}...", test_name).yellow().bold());
 
-                                let result = $subtest(crd_client, &mut fixture).await;
+                                let result = $subtest(context, &mut fixture).await;
                                 if let Err(err) = result {
                                     let err_msg = format!("{} failed: {}", test_name, err);
                                     eprintln!("{}", err_msg.red().bold());
@@ -181,7 +187,7 @@ mod tests {
     }
 
 
-    async fn test_successful_config_store_data_resolution(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_successful_config_store_data_resolution(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-crd-deployment";
@@ -190,7 +196,7 @@ mod tests {
         fixture.prepare_single_config_store_claim_scenario(store_name, vec![MockConfig::success_with_body("{\"asd\": 1}")]).await;
 
         // Attempt to get the CRD instance and confirm structure
-        let store = crd_client.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
+        let store = ctx.v1alpha1.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
 
         let config_store = store.spec.provider.get_config_store();
 
@@ -201,7 +207,7 @@ mod tests {
         Ok(config)
 
     }
-    async fn test_successful_cluster_config_store_data_resolution(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_successful_cluster_config_store_data_resolution(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-crd-deployment-cluster-config-store";
@@ -210,7 +216,7 @@ mod tests {
         fixture.prepare_single_cluster_config_store_claim_scenario(store_name, vec![MockConfig::success_with_body("{\"asd\": 1}")]).await;
 
         // Attempt to get the CRD instance and confirm structure
-        let store = crd_client.get_cluster_config_store(format!("{}-store",store_name).as_str()).await?;
+        let store = ctx.v1alpha1.get_cluster_config_store(format!("{}-store",store_name).as_str()).await?;
 
         let config_store = store.spec.provider.get_config_store();
 
@@ -222,7 +228,7 @@ mod tests {
 
     }
 
-    async fn test_client_error_config_store_data_resolution(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_client_error_config_store_data_resolution(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-error-config-store-data-resolution";
@@ -231,7 +237,7 @@ mod tests {
         fixture.prepare_single_config_store_claim_scenario(store_name, vec![MockConfig::not_found_with_body("{\"error\": \"Not found\"}")]).await;
 
         // Attempt to get the CRD instance and confirm structure
-        let store = crd_client.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
+        let store = ctx.v1alpha1.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
 
         let config_store = store.spec.provider.get_config_store();
 
@@ -249,7 +255,7 @@ mod tests {
         Ok(String::from("Done"))
 
     }
-    async fn test_server_error_config_store_data_resolution(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_server_error_config_store_data_resolution(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-server-error-config-store-data-resolution";
@@ -258,7 +264,7 @@ mod tests {
         fixture.prepare_single_config_store_claim_scenario(store_name, vec![MockConfig::internal_server_error_with_body("{\"error\": \"Internal server error\"}")]).await;
 
         // Attempt to get the CRD instance and confirm structure
-        let store = crd_client.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
+        let store = ctx.v1alpha1.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
 
         let config_store = store.spec.provider.get_config_store();
 
@@ -276,7 +282,7 @@ mod tests {
         Ok(String::from("Done"))
 
     }
-    async fn test_config_store_returns_data_depending_on_params(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_config_store_returns_data_depending_on_params(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-server-error-config-store-data-resolution-based-on-params";
@@ -289,7 +295,7 @@ mod tests {
         ]).await;
 
         // Attempt to get the CRD instance and confirm structure
-        let store = crd_client.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
+        let store = ctx.v1alpha1.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
 
         let config_store = store.spec.provider.get_config_store();
 
@@ -309,7 +315,7 @@ mod tests {
     }
 
 
-    async fn test_basic_reconcilation(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_basic_reconcilation(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-basic-reconcilation";
@@ -318,14 +324,14 @@ mod tests {
         fixture.prepare_single_config_store_claim_scenario(store_name, vec![MockConfig::success_with_body("{\"dbConfig\": { \"host\": \"test_host\", logLevels: [\"INFO\", \"DEBUG\"]} }")]).await;
 
         // Attempt to get the CRD instance and confirm structure
-        let claim = crd_client.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
-        let secret_claim = crd_client.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
+        let claim = ctx.v1alpha1.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
+        let secret_claim = ctx.v1alpha1.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
 
-        let reconsile_action = claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
-        let reconsile_action_secret = secret_claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+        let reconsile_action = claim.reconcile( ctx.clone()).await?;
+        let reconsile_action_secret = secret_claim.reconcile( ctx.clone()).await?;
 
-        let mut config_map = crd_client.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
-        let mut secret_map = crd_client.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
+        let mut config_map = ctx.v1alpha1.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
+        let mut secret_map = ctx.v1alpha1.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
 
         let cm_data = config_map.data.unwrap();
         let sm_data = secret_map.data.unwrap();
@@ -383,7 +389,7 @@ DB__CONFIG_LOG__LEVELS_1=DEBUG"#);
 
     }
 
-    async fn test_config_files_with_merging_reconcilation(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_config_files_with_merging_reconcilation(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-config-files-with-merging-reconcilation";
@@ -396,14 +402,14 @@ DB__CONFIG_LOG__LEVELS_1=DEBUG"#);
         ]).await;
 
         // Attempt to get the CRD instance and confirm structure
-        let claim = crd_client.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
-        let secret_claim = crd_client.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
+        let claim = ctx.v1alpha1.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
+        let secret_claim = ctx.v1alpha1.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
 
-        let reconsile_action = claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
-        let reconsile_action_secret = secret_claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+        let reconsile_action = claim.reconcile( ctx.clone()).await?;
+        let reconsile_action_secret = secret_claim.reconcile( ctx.clone()).await?;
 
-        let mut config_map = crd_client.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
-        let mut secret_map = crd_client.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
+        let mut config_map = ctx.v1alpha1.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
+        let mut secret_map = ctx.v1alpha1.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
 
         let cm_data = config_map.data.unwrap();
         let sm_data = secret_map.data.unwrap();
@@ -467,7 +473,7 @@ DB__CONFIG_TIMEOUT=1000"#);
 
     }
 
-    async fn test_basic_reconcilation_with_cluster_config_store(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_basic_reconcilation_with_cluster_config_store(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-basic-reconcilation-with-cluster-config-store";
@@ -476,14 +482,14 @@ DB__CONFIG_TIMEOUT=1000"#);
         fixture.prepare_single_cluster_config_store_claim_scenario(store_name, vec![MockConfig::success_with_body("{\"dbConfig\": { \"host\": \"test_host\", logLevels: [\"INFO\", \"DEBUG\"]} }")]).await;
 
         // Attempt to get the CRD instance and confirm structure
-        let claim = crd_client.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
-        let secret_claim = crd_client.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
+        let claim = ctx.v1alpha1.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
+        let secret_claim = ctx.v1alpha1.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
 
-        let reconsile_action = claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
-        let reconsile_action_secret = secret_claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+        let reconsile_action = claim.reconcile( ctx.clone()).await?;
+        let reconsile_action_secret = secret_claim.reconcile(ctx.clone()).await?;
 
-        let mut config_map = crd_client.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
-        let mut secret_map = crd_client.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
+        let mut config_map = ctx.v1alpha1.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
+        let mut secret_map = ctx.v1alpha1.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
 
         let cm_data = config_map.data.unwrap();
         let sm_data = secret_map.data.unwrap();
@@ -541,7 +547,7 @@ DB__CONFIG_LOG__LEVELS_1=DEBUG"#);
 
     }
 
-    async fn test_config_files_with_merging_reconcilation_with_cluster_config_store(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_config_files_with_merging_reconcilation_with_cluster_config_store(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-config-files-with-merging-reconcilation-with-cluster-config-store";
@@ -554,14 +560,14 @@ DB__CONFIG_LOG__LEVELS_1=DEBUG"#);
         ]).await;
 
         // Attempt to get the CRD instance and confirm structure
-        let claim = crd_client.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
-        let secret_claim = crd_client.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
+        let claim = ctx.v1alpha1.get_config_map_claim(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config Map Claim could not be found");
+        let secret_claim = ctx.v1alpha1.get_secret_claim(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret Claim could not be found");
 
-        let reconsile_action = claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
-        let reconsile_action_secret = secret_claim.reconcile( Arc::new(Data { client: crd_client.client() })).await?;
+        let reconsile_action = claim.reconcile( ctx.clone()).await?;
+        let reconsile_action_secret = secret_claim.reconcile( ctx.clone()).await?;
 
-        let mut config_map = crd_client.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
-        let mut secret_map = crd_client.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
+        let mut config_map = ctx.v1alpha1.get_config_map(format!("{}-cmc",store_name).as_str(), namespace).await.expect("Config map was not reconciled properly");
+        let mut secret_map = ctx.v1alpha1.get_secret(format!("{}-sc",store_name).as_str(), namespace).await.expect("Secret was not reconciled properly");
 
         let cm_data = config_map.data.unwrap();
         let sm_data = secret_map.data.unwrap();
@@ -624,19 +630,19 @@ DB__CONFIG_TIMEOUT=1000"#);
         Ok(String::from("Done"))
 
     }
-    async fn test_other_feature(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_other_feature(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
         // Example subtest logic here
         // ...
         Ok("Other Feature Test successful".to_string())
     }
 
-    async fn test_other_feature2(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_other_feature2(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
         // Example subtest logic here
         // ...
         Ok("Other2 Feature Test successful".to_string())
     }
 
-    async fn test_other_feature3(crd_client: CrdClient, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_other_feature3(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
         // Example subtest logic here
         // ...
         Ok("Other2 Feature Test successful".to_string())

@@ -113,16 +113,16 @@ impl HasTarget for ConfigMapClaim {
 
 #[async_trait]
 impl ConfigurationDiscoverer<ConfigMap> for ConfigMapClaim {
-    async fn create_resource_spec(&self, client: Arc<Client>) -> std::result::Result<ConfigMap, Error> {
+    async fn create_resource_spec(&self, ctx: Arc<Data>) -> std::result::Result<ConfigMap, Error> {
         let name = self.spec.target.name.clone();
         let namespace = <Self as kube::ResourceExt>::namespace(self).unwrap();
         let mut data: BTreeMap<String, String> = BTreeMap::new();
 
         for (file, refs) in &self.spec.data {
-            Self::compose_file(self, client.clone(), &refs, &namespace, file, &mut data).await?
+            Self::compose_file(self, ctx.clone(), &refs, &namespace, file, &mut data).await?
         }
 
-        self.record_event(client.clone(), "Reconcile", "Successful", EventType::Normal).await;
+        self.record_event(ctx.client.clone(), "Reconcile", "Successful", EventType::Normal).await;
 
         Ok(ConfigMap {
             metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
@@ -241,14 +241,14 @@ impl Default for ConfigurationSourceStatus {
 
 #[async_trait]
 impl ConfigurationDiscoverer<Secret> for SecretClaim {
-    async fn create_resource_spec(&self, client: Arc<Client>) -> std::result::Result<Secret, Error> {
+    async fn create_resource_spec(&self, ctx: Arc<Data>) -> std::result::Result<Secret, Error> {
         let name = self.spec.target.name.clone();
         let namespace = <Self as kube::ResourceExt>::namespace(self).unwrap();
         let mut data: BTreeMap<String, String> = BTreeMap::new();
 
 
         for (file, refs) in &self.spec.data {
-            Self::compose_file(self, client.clone(), &refs, &namespace, file, &mut data).await?
+            Self::compose_file(self, ctx.clone(), &refs, &namespace, file, &mut data).await?
         }
 
 
@@ -261,7 +261,7 @@ impl ConfigurationDiscoverer<Secret> for SecretClaim {
             .collect();
 
 
-        self.record_event(client.clone(), "Reconcile", "Successful", EventType::Normal).await;
+        self.record_event(ctx.client.clone(), "Reconcile", "Successful", EventType::Normal).await;
 
         Ok(Secret {
             metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
