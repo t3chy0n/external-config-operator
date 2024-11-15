@@ -21,14 +21,16 @@ mod contract;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
     //TODO: Add configurable log level
     tracing_subscriber::fmt()
         .with_max_level(Level::INFO)
         .init();
 
+    let (shutdown_send, mut shutdown_recv) = mpsc::unbounded_channel::<()>();
+
     let token = Arc::new(CancellationToken::new());
-    notify_cancellation_token(&token);
+    notify_cancellation_token(&token,  shutdown_recv);
+
 
     let client = Client::try_default().await.expect("failed to create kube Client");
     let c = Arc::new(client);
@@ -44,17 +46,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         LeaderElection::new(token.clone(), Arc::new(data.clone()))
     );
 
+
     let lease = leader_elector.claim_leadership_loop().await;
-    if let Ok(Some(lease)) = lease {
-        tokio::spawn(async move {
-            leader_elector.refresh_leadership_loop(lease).await;
-        });
-    } else {
-        info!("No k8s env variables set. Startus controller...");
+
+    match lease {
+        Ok(Some(lease)) => {
+            tokio::spawn(async move {
+                leader_elector.refresh_leadership_loop().await;
+            });
+        }
+        Ok(None) => {
+            info!("No k8s env variables set. Startus controller...");
+        },
+        Err(e) => {
+            info!("There was some error when trying to claim lease. Closing... {:?}", e);
+            token.cancel()
+        }
+
     }
 
     //Wait for a moment in case close signal was passed.
-    let mut interval = tokio::time::interval(Duration::from_secs(3));
+    let mut interval = tokio::time::interval(Duration::from_millis(100));
     tokio::select! {
         _ = interval.tick() => {
             join![

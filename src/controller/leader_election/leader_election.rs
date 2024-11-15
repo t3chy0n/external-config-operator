@@ -47,7 +47,8 @@ impl LeaderElection {
 
     pub async fn claim_leadership_loop(&self) -> Result<Option<Lease>, Error> {
         info!("Trying to acquire lease...");
-        self.run_cancellable(|| async move {
+
+       self.run_cancellable(|| async move {
             loop {
                 let result =  self.ctx.api_client.try_create_lease_for_current_pod().await;
                 match result {
@@ -61,12 +62,13 @@ impl LeaderElection {
             }
         }).await
 
+
     }
-    pub async fn refresh_leadership_loop(&self, lease: Lease) {
+    pub async fn refresh_leadership_loop(&self) {
         let mut refresh_interval = tokio::time::interval(Duration::from_secs(10));
         let namespace = env::var("KUBERNETES_NAMESPACE").unwrap_or_else(|_| "default".to_string());
 
-        self.run_cancellable(|| async move {
+        let _ = self.run_cancellable(|| async move {
             loop {
                 refresh_interval.tick().await;
                 let mut lease = match self.ctx.api_client.get_lease(&CONTROLLER_LEASE_NAME, &namespace.as_str()).await {
