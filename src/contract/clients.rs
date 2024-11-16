@@ -108,7 +108,7 @@ pub trait K8sClient: K8sClientAware  + Send + Sync {
 
             }),
         };
-        self.create_lease(&PostParams::default(), &lease, namespace.as_str()).await?;
+        self.create_lease(&PostParams::default(), &lease, namespace.as_str()).await;
 
         let lease = self.get_lease(CONTROLLER_LEASE_NAME, namespace.as_str()).await?;
         let holder = lease.spec.as_ref().and_then(|spec| spec.holder_identity.as_ref());

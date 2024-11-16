@@ -114,7 +114,10 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
         };
 
         let config_store = provider.get_config_store();
-        let file = config_store.get_config(store_ref.configurationStoreParams.clone()).await?;
+        let file = config_store.get_config(
+            store_ref.configurationStoreParams.clone(),
+            None
+        ).await?;
 
         let parsed_config = try_parse_file_to_json(&file)?;
         convert_to_json(&parsed_config)

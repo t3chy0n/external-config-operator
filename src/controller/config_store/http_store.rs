@@ -4,6 +4,8 @@ use std::os::linux::raw::stat;
 use std::time::Duration;
 use async_trait::async_trait;
 use log::debug;
+use reqwest::header;
+use reqwest::header::HeaderMap;
 use tracing_subscriber::fmt::format;
 use crate::contract::iconfigstore::IConfigStore;
 use crate::contract::lib::Error;
@@ -26,17 +28,40 @@ impl HttpConfigStore {
 
 #[async_trait]
 impl IConfigStore for HttpConfigStore {
-    async fn get_config(&self, query_params: Option<HashMap<String, String>>) -> Result<String, Error> {
+    async fn get_config(
+        &self,
+        query_params: Option<HashMap<String, String>>,
+        headers: Option<HashMap<String, String>>
+    ) -> Result<String, Error> {
+        let mut merged_headers_map: HashMap<String, String> = HashMap::new();
+        merged_headers_map.extend(
+            self.config.headers.clone()
+        );
+        merged_headers_map.extend(
+            headers.unwrap_or(HashMap::new())
+        );
+
+        let mut merged_query_params: HashMap<String, String> = HashMap::new();
+        merged_query_params.extend(
+            self.config.query_params.clone()
+        );
+        merged_query_params.extend(
+            query_params.unwrap_or(HashMap::new())
+        );
+
+        let headers: HeaderMap =  (&merged_headers_map).try_into().expect("Valid headers");;
+
         // HTTP client logic (could use reqwest, etc.)
         let client = reqwest::Client::new();
 
         let url = reqwest::Url::parse_with_params(
             &self.config.url,
-            query_params.unwrap_or(HashMap::new())
+            merged_query_params
         ).map_err(|e|  { Error::HttpConfigStoreClientError(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) })?;
 
         let response = client
             .get(url.clone())
+            .headers(headers)
             .timeout(Duration::from_secs(5))
             .send()
             .await

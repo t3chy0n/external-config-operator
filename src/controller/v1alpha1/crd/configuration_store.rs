@@ -20,8 +20,8 @@ pub enum Provider {
 impl Provider {
     pub fn get_config_store(&self) -> Box<dyn IConfigStore> {
         match &self {
-            Provider::Http(http_config) => Box::new(HttpConfigStore::new(CrdConfigMapper::map_http_config(http_config))),
-            Provider::Vault(vault_config) => Box::new(VaultConfigStore::new(CrdConfigMapper::map_vault_config(vault_config))),
+            Provider::Http(http_config) => Box::new(HttpConfigStore::new(CrdConfigMapper::map_http_config(http_config.clone()))),
+            Provider::Vault(vault_config) => Box::new(VaultConfigStore::new(CrdConfigMapper::map_vault_config(vault_config.clone()))),
         }
     }
 }
@@ -31,6 +31,8 @@ impl Provider {
 #[serde(rename_all = "camelCase")]
 pub struct HttpConfig {
     pub url: String,
+    pub headers : Option<HashMap<String, String>>,
+    pub query_params : Option<HashMap<String, String>>
 }
 
 // Define Vault-specific configuration
@@ -76,15 +78,15 @@ pub struct CrdConfigMapper {}
 
 impl CrdConfigMapper {
 
-    fn map_http_config(http_config: &HttpConfig) -> HttpConfigStoreConnectionDetails {
+    fn map_http_config(http_config: HttpConfig) -> HttpConfigStoreConnectionDetails {
 
         HttpConfigStoreConnectionDetails {
             url: http_config.url.clone(),
-            headers: HashMap::new(),
-            query_params: HashMap::new()
+            headers: http_config.headers.unwrap_or(HashMap::new()),
+            query_params: http_config.query_params.unwrap_or(HashMap::new()),
         }
     }
-    fn map_vault_config(vault_config: &VaultConfig) -> VaultConfigStoreConnectionDetails {
+    fn map_vault_config(vault_config: VaultConfig) -> VaultConfigStoreConnectionDetails {
         VaultConfigStoreConnectionDetails {
             url: vault_config.server.clone(),
             headers: HashMap::new(),

@@ -202,9 +202,32 @@ mod tests {
 
         let config_store = store.spec.provider.get_config_store();
 
-        let config = config_store.get_config(None).await.expect("Config should be returned");
+        let config = config_store.get_config(None, None).await.expect("Config should be returned");
 
         assert_eq!(config, "{\"asd\": 1}");
+
+        Ok(config)
+
+    }
+    async fn test_successful_config_store_common_parameter(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+
+        // Verify `ClusterConfigurationStore` CRD is deployed
+        let store_name = "test-crd-deployment-config-store-common-parameter";
+        let namespace = "default";
+
+        let mut query_params = HashMap::new();
+        query_params.insert(String::from("store_param"), String::from("test"));
+
+        fixture.prepare_single_config_store_claim_scenario(store_name, vec![MockConfig::query_params_response(query_params, "{\"test\": 1}")]).await;
+
+        // Attempt to get the CRD instance and confirm structure
+        let store = ctx.v1alpha1.get_config_store(format!("{}-store",store_name).as_str(), namespace).await?;
+
+        let config_store = store.spec.provider.get_config_store();
+
+        let config = config_store.get_config(None, None).await.expect("Config should be returned");
+
+        assert_eq!(config, "{\"test\": 1}");
 
         Ok(config)
 
@@ -222,7 +245,7 @@ mod tests {
 
         let config_store = store.spec.provider.get_config_store();
 
-        let config = config_store.get_config(None).await.expect("Config should be returned");
+        let config = config_store.get_config(None, None).await.expect("Config should be returned");
 
         assert_eq!(config, "{\"asd\": 1}");
 
@@ -243,7 +266,7 @@ mod tests {
 
         let config_store = store.spec.provider.get_config_store();
 
-        let config = config_store.get_config(None).await;
+        let config = config_store.get_config(None, None).await;
 
 
         match config {
@@ -270,7 +293,7 @@ mod tests {
 
         let config_store = store.spec.provider.get_config_store();
 
-        let config = config_store.get_config(None).await;
+        let config = config_store.get_config(None, None).await;
 
 
         match config {
@@ -303,11 +326,11 @@ mod tests {
 
         let mut params1: HashMap<String, String> = HashMap::new();
         params1.insert(String::from("test1"), String::from("value1"));
-        let config1 = config_store.get_config(Some(params1)).await.expect("Configuration based on test1 param couldn't be retrieved");
+        let config1 = config_store.get_config(Some(params1), None).await.expect("Configuration based on test1 param couldn't be retrieved");
 
         let mut params2 = HashMap::new();
         params2.insert(String::from("test1"), String::from("value2"));
-        let config2 = config_store.get_config(Some(params2)).await.expect("Configuration based on test1 param couldn't be retrieved");
+        let config2 = config_store.get_config(Some(params2), None).await.expect("Configuration based on test1 param couldn't be retrieved");
 
         assert_eq!(config1, "Some");
         assert_eq!(config2, "Some2");
@@ -655,6 +678,8 @@ DB__CONFIG_TIMEOUT=1000"#);
     define_k8s_tests!({
             test_successful_config_store_data_resolution,
             test_successful_cluster_config_store_data_resolution,
+
+            test_successful_config_store_common_parameter,
             test_client_error_config_store_data_resolution,
             test_server_error_config_store_data_resolution,
             test_config_store_returns_data_depending_on_params,
@@ -662,6 +687,7 @@ DB__CONFIG_TIMEOUT=1000"#);
             test_config_files_with_merging_reconcilation,
             test_config_files_with_merging_reconcilation_with_cluster_config_store,
             test_basic_reconcilation_with_cluster_config_store,
+
            // test_other_feature,
            // test_other_feature2,
            // test_other_feature3,

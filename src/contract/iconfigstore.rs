@@ -6,6 +6,10 @@ use crate::contract::lib::Error;
 pub trait IConfigStore: Send + Sync {
 
 
-    async fn get_config(&self, query_params: Option<HashMap<String, String>>) -> Result<String, Error>;
+    async fn get_config(
+        &self,
+        query_params: Option<HashMap<String, String>>,
+        headers: Option<HashMap<String, String>>
+    ) -> Result<String, Error>;
 }
 

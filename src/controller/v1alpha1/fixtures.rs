@@ -39,6 +39,13 @@ pub mod tests {
                 query_params: Some(query_params)
             }
         }
+        pub fn query_params_response(query_params: HashMap<String, String>, response: &str) -> Self {
+            MockConfig {
+                status_code: 200,
+                response_body: String::from(response),
+                query_params: Some(query_params)
+            }
+        }
         pub fn success_with_body(body: &str) -> Self {
             MockConfig {
                 status_code: 200,
@@ -142,6 +149,7 @@ pub mod tests {
 
         pub async fn add_configuration_store(&mut self, name: &str, namespace: &str, configs: Vec<MockConfig>) -> &Self {
             let mock_url = self.mock_manager.create_mock_server(name, configs).await;
+
             self.resources.push(ResourceFixture {
                 name: name.to_string(),
                 namespace: Some(namespace.to_string()),
@@ -154,6 +162,14 @@ pub mod tests {
 
         pub async fn add_cluster_configuration_store(&mut self, name: &str, configs: Vec<MockConfig>) -> &Self {
             let mock_url = self.mock_manager.create_mock_server(name, configs).await;
+
+            let mut query_params = HashMap::new();
+            query_params.insert(String::from("cluster_store_param"), String::from("test"));
+
+            let mut headers = HashMap::new();
+            headers.insert(String::from("cluster_store_header"), String::from("test"));
+
+
             self.resources.push(ResourceFixture {
                 name: name.to_string(),
                 namespace: None,
@@ -196,6 +212,7 @@ pub mod tests {
         }
 
         pub async fn build(&self) {
+
             for resource in &self.resources {
                 let yaml = match resource.kind.as_str() {
                     "ConfigurationStore" | "ClusterConfigurationStore" => format!(r#"
@@ -208,6 +225,10 @@ pub mod tests {
                           provider:
                             http:
                               url: {}
+                              queryParams:
+                                store_param: test
+                              headers:
+                                store_header: test
                     "#,
                       resource.kind, resource.name,
                       resource.namespace.as_ref().map(|ns| format!("namespace: {}", ns)).unwrap_or_default(),
