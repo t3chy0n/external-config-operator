@@ -74,6 +74,8 @@ pub struct ClaimRefParametrization {
 }
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct ClaimRef {
+    //TODO: Json schema to validate against
+    // pub schema: Option<String> either schema or url to schema (schema refs? )
     pub from: Vec<ClaimRefParametrization>,
     pub strategy: Option<ConfigInjectionStrategy>
 }

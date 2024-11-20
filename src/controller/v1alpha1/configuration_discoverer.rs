@@ -13,7 +13,7 @@ use kube::runtime::events::EventType;
 use serde_json::json;
 use tracing::log::info;
 use crate::contract::clients::ICrdClient;
-use super::crd::claim::{ClaimRef, ClaimRefParametrization, ConfigInjectionStrategy, ConfigMapClaim, SecretClaim, SupportedConfigurationStoreResourceType};
+use super::crd::claim::{ClaimRef, ClaimRefParametrization, ConfigInjectionStrategy, SupportedConfigurationStoreResourceType};
 use crate::controller::utils::parsers::text_to_json::try_parse_file_to_json;
 use crate::controller::utils::file_format::{convert_to_format, convert_to_json, merge_configs, to_file_type, to_file_type_from_filename, ConfigFileType, ConfigFormat};
 

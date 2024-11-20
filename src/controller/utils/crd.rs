@@ -114,3 +114,4 @@ impl HasData for Secret {
         &mut self.metadata
     }
 }
+

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use async_trait::async_trait;
+use k8s_openapi::api::apps::v1::{DeploymentSpec, DaemonSetSpec, StatefulSetSpec };
 use kube::{Client, CustomResource};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -8,6 +9,7 @@ use crate::contract::iconfigstore::IConfigStore;
 use crate::contract::lib::Error;
 use crate::controller::config_store::http_store::{HttpConfigStore, HttpConfigStoreConnectionDetails};
 use crate::controller::config_store::vault_store::{VaultConfigStore, VaultConfigStoreConnectionDetails};
+use crate::controller::v1alpha1::crd::configuration_store_workload::DeployAs;
 
 // Define the config_store enum
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
@@ -16,6 +18,7 @@ pub enum Provider {
     Http(HttpConfig),
     Vault(VaultConfig),
 }
+
 
 impl Provider {
     pub fn get_config_store(&self) -> Box<dyn IConfigStore> {
@@ -45,15 +48,21 @@ pub struct VaultConfig {
 #[derive(CustomResource, Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[kube(group = "external-config.com", version="v1alpha1", kind = "ConfigurationStore", namespaced )]
 #[kube(status = "ConfigurationSourceStatus")]
+#[serde(rename_all = "camelCase")]
 pub struct ConfigurationStoreSpec {
     pub provider: Provider,
+    pub deploy_as: Option<DeployAs>
+
 }
 
 #[derive(CustomResource, Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[kube(group = "external-config.com", version="v1alpha1", kind = "ClusterConfigurationStore" )]
 #[kube(status = "ConfigurationSourceStatus")]
+#[serde(rename_all = "camelCase")]
 pub struct ClusterConfigurationStoreSpec {
     pub provider: Provider,
+    pub deploy_as: Option<DeployAs>
+
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, JsonSchema)]

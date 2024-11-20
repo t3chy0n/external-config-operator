@@ -56,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
         }
         Ok(None) => {
-            info!("No k8s env variables set. Startus controller...");
+            info!("No k8s env variables set. Starting controller...");
         },
         Err(e) => {
             info!("There was some error when trying to claim lease. Closing... {:?}", e);
