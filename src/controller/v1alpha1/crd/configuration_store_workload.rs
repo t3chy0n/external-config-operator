@@ -3,8 +3,13 @@ use std::env;
 use std::sync::Arc;
 use k8s_openapi::api::core::v1::{ConfigMapKeySelector, PodTemplateSpec, SecretKeySelector, Volume};
 use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
+use kube::{Api, ResourceExt};
+use kube::api::{Patch, PatchParams, PostParams};
+use kube::runtime::controller::Action;
+use log::info;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use crate::contract::clients::K8sClient;
 use crate::contract::iconfigstore::IConfigStore;
 use crate::contract::lib::Error;
@@ -235,8 +240,31 @@ pub enum DeployAs {
     DaemonSet(DeployAsDaemonSet),
 }
 
-impl DeployAs {
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+pub struct DeployAsDeployment {
+    replicas: Option<i32>,
+    service: ConfigurationStoreServiceSpec,
+    pod_template: Option<ConfigurationStorePodTemplateSpec>,
+    // pub affinity: Option<AffinitySpec>,
+}
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+pub struct DeployAsStatefulSet {
+    replicas: Option<i32>,
+    service: ConfigurationStoreServiceSpec,
+    pod_template: Option<ConfigurationStorePodTemplateSpec>,
 
+}
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+pub struct DeployAsDaemonSet {
+    service: ConfigurationStoreServiceSpec,
+    pub pod_template: Option<ConfigurationStorePodTemplateSpec>,
+}
+
+
+
+struct ConfigStoreDeploymentReconcile {}
+
+impl ConfigStoreDeploymentReconcile {
     pub async fn workload_exists(&self, ctx: Arc<Data>, name: &str) -> Result<bool, Error> {
         let namespace = env::var("KUBERNETES_NAMESPACE").unwrap_or_else(|_| "default".to_string()).as_str();
 
@@ -283,23 +311,33 @@ impl DeployAs {
     pub async fn reconcile_network_policy(&self, ctx: Arc<Data>) -> Result<(), Error> {
         return Ok(());
     }
-}
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-pub struct DeployAsDeployment {
-    replicas: Option<i32>,
-    service: ConfigurationStoreServiceSpec,
-    pod_template: Option<ConfigurationStorePodTemplateSpec>,
-    // pub affinity: Option<AffinitySpec>,
-}
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-pub struct DeployAsStatefulSet {
-    replicas: Option<i32>,
-    service: ConfigurationStoreServiceSpec,
-    pod_template: Option<ConfigurationStorePodTemplateSpec>,
 
-}
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-pub struct DeployAsDaemonSet {
-    service: ConfigurationStoreServiceSpec,
-    pub pod_template: Option<ConfigurationStorePodTemplateSpec>,
+    async fn reconcile(&self, ctx: Arc<Data>) -> crate::contract::lib::Result<Action> {
+        let client = ctx.client.clone();
+        let namespace = <Self as ResourceExt>::namespace(self).unwrap();
+        let name = self.name_any();
+
+        let resources: Api<TargetType> = Api::namespaced((*client).clone(), &namespace);
+        info!("Reconciling resource: {} in namespace: {}", name, namespace);
+        let target = self.get_target();
+
+        match self.workload_exists(&target.name, ctx.clone()).await {
+            Ok(existing) => {
+                let desired_resource = self.create_resource_spec(ctx.clone()).await?;
+
+                if existing_resource.get_data() != desired_resource.get_data() {
+                    let patch = Patch::Apply(json!(&desired_resource));
+                    let params = PatchParams::apply("configmap-claim-controller").force();
+                    resources.patch(&target.name, &params, &patch).await.map_err(Error::KubeError)?;
+                }
+            }
+            Err(kube::Error::Api(ref e)) if e.code == 404 => {
+                let new_resource = self.create_resource_spec(ctx.clone()).await?;
+                resources.create(&PostParams::default(), &new_resource).await.map_err(Error::KubeError)?;
+            }
+            Err(e) => return Err(Error::KubeError(e)),
+        }
+
+        Ok(Action::requeue(self.get_refresh_interval()))
+    }
 }

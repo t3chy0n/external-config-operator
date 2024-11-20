@@ -19,7 +19,6 @@ pub enum Provider {
     Vault(VaultConfig),
 }
 
-
 impl Provider {
     pub fn get_config_store(&self) -> Box<dyn IConfigStore> {
         match &self {
@@ -76,11 +75,6 @@ impl Default for ConfigurationSourceStatus {
             last_synced: None,
         }
     }
-}
-
-pub struct ConfigStoreFetcherAdapter {
-    client: Arc<Client>,
-    provider: Provider
 }
 
 pub struct CrdConfigMapper {}
