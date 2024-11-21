@@ -8,7 +8,7 @@ kind: Pod
 metadata:
   name: "{{ $fullName }}-test-accessibility-from-controller-{{ $config.name }}-cluster"
   labels:
-    app: {{ $name }}
+    app: {{ $fullName }}
     test: networkpolicy-from-controller-{{ $config.name }}
   annotations:
     "helm.sh/hook": test

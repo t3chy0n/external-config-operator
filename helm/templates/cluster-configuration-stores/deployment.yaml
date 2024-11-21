@@ -1,5 +1,5 @@
 {{- $globalNamespace := .Release.Namespace }}
-{{- $operatorName := include "external-config-operator.name" . }}
+{{- $operatorName := include "external-config-operator.fullname" . }}
 {{- range $config := .Values.clusterConfigurationStores }}
 apiVersion: apps/v1
 kind: Deployment

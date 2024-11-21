@@ -1,5 +1,5 @@
 {{- $globalNamespace := .Release.Namespace }}
-{{- $operatorName := include "external-config-operator.name" . }}
+{{- $operatorName := include "external-config-operator.fullname" . }}
 {{- $networkPolicyName := include "external-config-operator.networkPolicyName" . }}
 {{- range $config := .Values.clusterConfigurationStores }}
 

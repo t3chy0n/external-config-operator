@@ -4,7 +4,7 @@ metadata:
   name: busybox
   namespace: test
   labels:
-    app: external-config-operator
+    app: config-controller-external-config-operator
 
 spec:
   containers:

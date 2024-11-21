@@ -1,8 +1,8 @@
 {{- $globalNamespace := .Release.Namespace }}
-{{- $operatorName := include "external-config-operator.name" . }}
+{{- $operatorName := include "external-config-operator.fullname" . }}
 {{- $networkPolicyName := include "external-config-operator.networkPolicyName" . }}
 {{- range $config := .Values.configurationStores }}
-{{- $namespace := $config.namespace | default $globalNamespace }}
+{{- $namespace := $config.namespace }}
 
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

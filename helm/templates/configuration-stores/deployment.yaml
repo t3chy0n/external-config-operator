@@ -1,14 +1,14 @@
 {{- $globalNamespace := .Release.Namespace }}
-{{- $operatorName := include "external-config-operator.name" . }}
+{{- $operatorName := include "external-config-operator.fullname" . }}
 {{- range $config := .Values.configurationStores }}
 {{- $namespace := $config.namespace }}
 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $config.name }}-{{ $namespace }}
+  name: {{ $operatorName }}-{{ $config.name }}-{{ $namespace }}
   labels:
-    app: {{ $config.name }}
+    app: {{ $operatorName }}-{{ $config.name }}-{{ $namespace }}
 spec:
   replicas: {{ $config.replicaCount | default 1 }}
   selector:
