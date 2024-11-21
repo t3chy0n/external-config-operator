@@ -126,7 +126,7 @@ pub mod tests {
                     .await;
             }
 
-            let uri = mock_server.uri();
+            let uri = mock_server.address().to_string();
             self.mock_servers.insert(key.to_string(), mock_server);
             uri
         }
@@ -224,7 +224,7 @@ pub mod tests {
                         spec:
                           provider:
                             http:
-                              url: {}
+                              baseUrl: {}
                               queryParams:
                                 store_param: test
                               headers:

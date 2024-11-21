@@ -1,10 +1,47 @@
 apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox
+  namespace: test
+  labels:
+    app: external-config-operator
+
+spec:
+  containers:
+    - image: busybox
+      command:
+        - sleep
+        - "3600"
+      imagePullPolicy: IfNotPresent
+      name: busybox
+  restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox2
+  namespace: test
+
+spec:
+  containers:
+    - image: busybox
+      command:
+        - sleep
+        - "3600"
+      imagePullPolicy: IfNotPresent
+      name: busybox
+  restartPolicy: Always
+
+---
+
+apiVersion: v1
 data:
   ca.crt: data2
 kind: ConfigMap
 metadata:
   name: test-external
-  namespace: default
+  namespace: test
 
 ---
 #apiVersion: v1
@@ -22,7 +59,7 @@ apiVersion: external-config.com/v1alpha1
 kind: ConfigMapClaim
 metadata:
   name: test-external-cmc
-  namespace: default
+  namespace: test
 spec:
   data:
     config.yaml:
@@ -40,6 +77,18 @@ spec:
           configurationStoreParams:
             testParam1: asd
             testParam2: asd
+#          templateRefs:
+#            - name: test
+#              ref:
+#                kind: ConfigMap
+#                name: asd
+#                namespace: test
+#            - name: test2
+#              ref:
+#                kind: ConfigMap
+#                name: asd
+#                namespace: test
+
 
 #        - configurationStoreRef:
 #            kind: ConfigurationStore
@@ -148,7 +197,7 @@ metadata:
 spec:
   provider:
     http:
-      url: https://raw.githubusercontent.com/Ylianst/MeshCentral/refs/heads/master/sample-config.json
+      baseUrl: raw.githubusercontent.com/Ylianst/MeshCentral/refs/heads/master/sample-config.json
 
 ---
 apiVersion: external-config.com/v1alpha1
@@ -158,28 +207,42 @@ metadata:
 spec:
   provider:
     http:
-      url: https://raw.githubusercontent.com/argoproj/argo-workflows/refs/heads/main/examples/input-artifact-raw.yaml
+      baseUrl: raw.githubusercontent.com/argoproj/argo-workflows/refs/heads/main/examples/input-artifact-raw.yaml
 
+# TODO: Some values needs to be templateable, what would be ideal structure for this?
+#  templateRefs:
+#    - name: test
+#      ref:
+#        kind: ConfigMap
+#        name: asd
+#        namespace: test
+#    - name: test2
+#      ref:
+#        kind: Secret
+#        name: asd
+#        namespace: test
 
 ---
 apiVersion: external-config.com/v1alpha1
 kind: ConfigurationStore
 metadata:
   name: test-external-source-env
+  namespace: test
 spec:
   provider:
     http:
-      url: https://pastebin.com/raw/5yvAhSRG
+      baseUrl: sub1.test.svc.cluster.local/json
 
 ---
 apiVersion: external-config.com/v1alpha1
 kind: ConfigurationStore
 metadata:
   name: test-external-source-properties
+  namespace: test
 spec:
   provider:
     http:
-      url: https://raw.githubusercontent.com/u-ways/kotlin-quarkus-realworld-example-app/refs/heads/main/src/main/resources/application.properties
+      baseUrl: raw.githubusercontent.com/u-ways/kotlin-quarkus-realworld-example-app/refs/heads/main/src/main/resources/application.properties
 
 
 ---
@@ -188,10 +251,11 @@ apiVersion: external-config.com/v1alpha1
 kind: ClusterConfigurationStore
 metadata:
   name: ctest-external-source
+  namespace: test
 spec:
   provider:
     http:
-      url: https://raw.githubusercontent.com/LearnWebCode/json-example/refs/heads/master/animals-1.json
+      baseUrl: raw.githubusercontent.com/LearnWebCode/json-example/refs/heads/master/animals-1.json
 
 ---
 
@@ -199,8 +263,9 @@ apiVersion: external-config.com/v1alpha1
 kind: ConfigurationStore
 metadata:
   name: bad-test-external-source
+  namespace: test
 spec:
   provider:
     http:
-      url: htt://raw.githubuserconten/json-example/refs/heads/master/animals-1.json
+      baseUrl: raw.githubuserconten/json-example/refs/heads/master/animals-1.json
 

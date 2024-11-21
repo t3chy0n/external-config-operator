@@ -11,7 +11,9 @@ use crate::contract::iconfigstore::IConfigStore;
 use crate::contract::lib::Error;
 
 pub struct HttpConfigStoreConnectionDetails {
-    pub url: String,
+    pub base_url: String,
+    pub path: Option<String>,
+    pub protocol: Option<String>,
     pub headers: HashMap<String, String>,
     pub query_params: HashMap<String, String>
 }
@@ -51,11 +53,20 @@ impl IConfigStore for HttpConfigStore {
 
         let headers: HeaderMap =  (&merged_headers_map).try_into().expect("Valid headers");;
 
-        // HTTP client logic (could use reqwest, etc.)
         let client = reqwest::Client::new();
 
+        let protocol = &self.config.protocol.clone().unwrap_or(String::from("http"));
+        let path = &self.config.path.clone().unwrap_or(String::from(""));
+        let base_url = &self.config.base_url.clone();;
+
+        let processed_url = format!("{}://{}{}",
+           protocol,
+           base_url,
+           path,
+        );
+
         let url = reqwest::Url::parse_with_params(
-            &self.config.url,
+            processed_url.as_str(),
             merged_query_params
         ).map_err(|e|  { Error::HttpConfigStoreClientError(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) })?;
 

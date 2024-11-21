@@ -1,0 +1,55 @@
+{{- $globalNamespace := .Release.Namespace }}
+{{- $operatorName := include "external-config-operator.name" . }}
+{{- range $config := .Values.clusterConfigurationStores }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $operatorName }}-{{ $config.name }}-cluster
+  labels:
+    app: {{ $config.name }}
+spec:
+  replicas: {{ $config.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      app: {{ $operatorName }}-{{ $config.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $operatorName }}-{{ $config.name }}
+    spec:
+      containers:
+        - name: {{ $config.name }}
+          image: "{{ $config.image.repository }}:{{ $config.image.tag }}"
+          imagePullPolicy: {{ $config.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - containerPort: {{ $config.containerPort }}
+              protocol: TCP
+{{/*          livenessProbe:*/}}
+{{/*            httpGet:*/}}
+{{/*              path: /*/}}
+{{/*              port: http*/}}
+{{/*          readinessProbe:*/}}
+{{/*            httpGet:*/}}
+{{/*              path: /*/}}
+{{/*              port: http*/}}
+          resources:
+            {{- toYaml $config.resources | nindent 12 }}
+          {{- if $config.env }}
+          env:
+            {{- range $key, $value := $config.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- end }}
+{{/*          {{- if $config.envFromConfigMap }}*/}}
+{{/*          envFrom:*/}}
+{{/*            - configMapRef:*/}}
+{{/*                name: {{ $config.envFromConfigMap }}*/}}
+{{/*          {{- end }}*/}}
+{{/*          {{- if $config.envFromSecret }}*/}}
+{{/*          envFrom:*/}}
+{{/*            - secretRef:*/}}
+{{/*                name: {{ $config.envFromSecret }}*/}}
+{{/*          {{- end }}*/}}
+---
+{{- end }}

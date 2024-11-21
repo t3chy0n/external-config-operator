@@ -1,0 +1,32 @@
+{{- $globalNamespace := .Release.Namespace }}
+{{- $fullName :=  include "external-config-operator.fullname" . }}
+{{- $name :=  include "external-config-operator.name" . }}
+{{- range $config := .Values.configurationStores }}
+{{- $namespace := $config.namespace | default $globalNamespace }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ $fullName }}-test-accessibility-from-controller-{{ $config.name }}"
+  labels:
+    app: {{ $name }}
+    test: networkpolicy-from-controller-{{ $config.name }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  containers:
+    - name: test-networkpolicy-from-controller-{{ $config.name }}
+      image: busybox
+      command:
+        - /bin/sh
+      args:
+        - -c
+        - |
+          if wget --spider --timeout=1 http://{{ $config.name }}-{{ $namespace }}.{{ $globalNamespace }}.svc.cluster.local:{{ $config.servicePort }}/json; then
+            echo "Test passed: Successfully accessed {{ $config.name }}"
+          else
+            echo "Test failed: Could not access {{ $config.name }}" && exit 1
+          fi
+  restartPolicy: Never
+---
+{{- end }}

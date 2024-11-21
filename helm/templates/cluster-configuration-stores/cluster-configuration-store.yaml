@@ -1,0 +1,14 @@
+{{- $globalNamespace := .Release.Namespace }}
+{{- $operatorName := include "external-config-operator.name" . }}
+{{- range $config := .Values.clusterConfigurationStores }}
+
+apiVersion: external-config.com/v1alpha1
+kind: ClusterConfigurationStore
+metadata:
+  name: {{ $config.name }}
+spec:
+  provider:
+    http:
+      baseUrl: {{ $config.name }}.{{ $globalNamespace }}.svc.cluster.local
+---
+{{- end }}

@@ -1,0 +1,32 @@
+{{- $globalNamespace := .Release.Namespace }}
+{{- $operatorName := include "external-config-operator.name" . }}
+{{- $networkPolicyName := include "external-config-operator.networkPolicyName" . }}
+{{- range $config := .Values.configurationStores }}
+{{- $namespace := $config.namespace | default $globalNamespace }}
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $networkPolicyName }}-{{ $config.name }}
+  labels:
+    app: {{ $operatorName }}-{{ $config.name }}-{{ $namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ $operatorName }}-{{ $config.name }}-{{ $namespace }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: {{ $operatorName }}
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              app: {{ $operatorName }}
+      ports:
+        - port: {{ $config.containerPort }}
+          protocol: TCP
+---
+{{- end }}

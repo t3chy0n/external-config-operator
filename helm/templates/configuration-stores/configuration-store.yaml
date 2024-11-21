@@ -1,0 +1,15 @@
+{{- $globalNamespace := .Release.Namespace }}
+{{- range $config := .Values.configurationStores }}
+{{- $namespace := $config.namespace }}
+
+apiVersion: external-config.com/v1alpha1
+kind: ConfigurationStore
+metadata:
+  name: {{ $config.name }}
+  namespace:  {{ $namespace }}
+spec:
+  provider:
+    http:
+      baseUrl: {{ $config.name }}.{{ $namespace }}.svc.cluster.local
+---
+{{- end }}

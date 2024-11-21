@@ -1,0 +1,28 @@
+{{- $globalNamespace := .Release.Namespace }}
+{{- $fullName :=  include "external-config-operator.fullname" . }}
+{{- $name :=  include "external-config-operator.name" . }}
+{{- range $config := .Values.clusterConfigurationStores }}
+{{- $namespace := $config.namespace | default $globalNamespace }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ $fullName }}-test-accessibility-from-outside-{{ $config.name }}-cluster"
+  labels:
+    test: networkpolicy-from-outside-workloads-{{ $config.name }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  containers:
+    - name: test-networkpolicy-from-outside-workloads-{{ $config.name }}
+      image: busybox
+      command:
+        - /bin/sh
+      args:
+        - -c
+        - |
+          wget --timeout=5 http://{{ $config.name }}.{{ $globalNamespace }}.svc.cluster.local:{{ $config.servicePort }}/json || exit 0
+          echo "Test failed: NetworkPolicy did not block access" && exit 1
+  restartPolicy: Never
+---
+{{- end }}

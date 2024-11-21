@@ -1,0 +1,23 @@
+{{- $globalNamespace := .Release.Namespace }}
+{{- $operatorName := include "external-config-operator.name" . }}
+{{- range $config := .Values.configurationStores }}
+{{- $namespace := $config.namespace | default $globalNamespace }}
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $config.name }}-{{$namespace}}
+  labels:
+    app: {{ $operatorName }}-{{ $config.name }}-{{$namespace}}
+
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ $config.servicePort }}
+      targetPort: {{ $config.containerPort }}
+      protocol: TCP
+      name: {{ $config.name }}
+  selector:
+    app: {{ $operatorName }}-{{ $config.name }}-{{ $namespace }}
+---
+{{- end }}

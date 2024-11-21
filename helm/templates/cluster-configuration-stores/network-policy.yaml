@@ -1,0 +1,31 @@
+{{- $globalNamespace := .Release.Namespace }}
+{{- $operatorName := include "external-config-operator.name" . }}
+{{- $networkPolicyName := include "external-config-operator.networkPolicyName" . }}
+{{- range $config := .Values.clusterConfigurationStores }}
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $networkPolicyName }}-{{ $config.name }}-cluster
+  labels:
+    app: {{ $operatorName }}-{{ $config.name }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ $operatorName }}-{{ $config.name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: {{ $operatorName }}
+        - namespaceSelector: {} # Allows all namespaces
+          podSelector:
+            matchLabels:
+              app: {{ $operatorName }}
+      ports:
+        - port: {{ $config.containerPort }}
+          protocol: TCP
+---
+{{- end }}

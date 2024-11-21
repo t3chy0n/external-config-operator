@@ -30,7 +30,9 @@ impl Provider {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct HttpConfig {
-    pub url: String,
+    pub base_url: String,
+    pub path: Option<String>,
+    pub protocol: Option<String>,
     pub headers : Option<HashMap<String, String>>,
     pub query_params : Option<HashMap<String, String>>
 }
@@ -81,7 +83,9 @@ impl CrdConfigMapper {
     fn map_http_config(http_config: HttpConfig) -> HttpConfigStoreConnectionDetails {
 
         HttpConfigStoreConnectionDetails {
-            url: http_config.url.clone(),
+            base_url: http_config.base_url.clone(),
+            protocol: http_config.protocol.clone(),
+            path: http_config.path.clone(),
             headers: http_config.headers.unwrap_or(HashMap::new()),
             query_params: http_config.query_params.unwrap_or(HashMap::new()),
         }

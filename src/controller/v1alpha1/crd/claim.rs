@@ -184,11 +184,8 @@ impl IReconcilable for ConfigMapClaim {
         }
     }
     async fn cleanup(&mut self,  ctx: Arc<Data>) -> Result<Action> {
-
         ConfigurationDiscoverer::<ConfigMap>::cleanup(self, ctx).await
-
     }
-
 }
 
 #[derive(CustomResource, Debug, Clone, Deserialize, Serialize, JsonSchema)]

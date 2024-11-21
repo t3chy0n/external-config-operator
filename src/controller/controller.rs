@@ -60,11 +60,8 @@ pub fn error_policy<T>(resource: Arc<T>, error: &Error, _ctx: Arc<Data>) -> Acti
 where
     T: ControllerReconcilableTargetTypeBounds
 {
-
     error!("Error reconciling: {:?}", error);
     Action::requeue(Duration::from_secs(60))
-
-
 }
 
 pub async fn run<T: Resource + IReconcilable>(data: Data)

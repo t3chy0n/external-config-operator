@@ -1,0 +1,17 @@
+apiVersion: v1
+items:
+  - apiVersion: coordination.k8s.io/v1
+    kind: Lease
+    metadata:
+      creationTimestamp: "2024-11-20T20:21:32Z"
+      name: external-config-operator-leader-election
+      namespace: test
+      resourceVersion: "3481659"
+      uid: e5679eef-7e7e-42ab-b38f-1808004aa848
+    spec:
+      acquireTime: "2024-11-20T20:21:32.756518Z"
+      leaseDurationSeconds: 20
+      renewTime: "2024-11-20T20:28:52.771415Z"
+kind: List
+metadata:
+  resourceVersion: ""

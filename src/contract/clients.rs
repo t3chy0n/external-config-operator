@@ -1,6 +1,6 @@
 use std::env;
 use std::sync::Arc;
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use either::Either;
 use k8s_openapi::api::coordination::v1::{Lease, LeaseSpec};
 use k8s_openapi::api::core::v1::{ConfigMap, Pod, Secret};
@@ -112,6 +112,27 @@ pub trait K8sClient: K8sClientAware  + Send + Sync {
 
         let lease = self.get_lease(CONTROLLER_LEASE_NAME, namespace.as_str()).await?;
         let holder = lease.spec.as_ref().and_then(|spec| spec.holder_identity.as_ref());
+        let last_renewal = lease.spec.as_ref().and_then(|spec| spec.renew_time.as_ref());
+
+        if let Some(last_renewal) = last_renewal
+        {
+            // Parse MicroTime into a chrono::DateTime<Utc>
+            let renewal_time = last_renewal.0;
+            let now = Utc::now();
+
+            // Check if the duration since last renewal is greater than 2 minutes
+            if now.signed_duration_since(renewal_time) > Duration::minutes(2) {
+                // Force delete the lease
+                self
+                    .delete_lease(
+                        &lease.metadata.name.clone().unwrap(),
+                        &kube::api::DeleteParams::default(),
+                        &namespace
+                    )
+                    .await?;
+                println!("Lease {} was deleted due to expired renew time", CONTROLLER_LEASE_NAME);
+            }
+        }
         if holder == Some(&pod_name) {
             info!("Acquired leadership with lease: {}", CONTROLLER_LEASE_NAME);
             Ok(lease)
