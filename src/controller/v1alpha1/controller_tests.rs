@@ -31,7 +31,7 @@ mod tests {
     use tokio::task::JoinError;
     use crate::contract::ireconcilable::IReconcilable;
     use crate::controller::controller::{apply_all_crds, apply_from_yaml, reconcile};
-    use crate::controller::utils::context::Data;
+    use crate::controller::utils::context::Context;
     use crate::controller::v1alpha1::controller::{ConfigMapClaim, ConfigurationStore};
     use crate::controller::v1alpha1::crd_client::{CrdClient};
     use crate::controller::v1alpha1::fixtures::tests::{ControllerFixtures, MockConfig};
@@ -134,7 +134,7 @@ mod tests {
                             let crd_client = Arc::new(CrdClient::new(client.clone()));
                             let mut fixture = ControllerFixtures::new(client.clone()).await;
 
-                            let context = Arc::new(Data{
+                            let context = Arc::new(Context{
                                 client: client.clone(),
                                 v1alpha1: crd_client.clone(),
                                 api_client: crd_client.clone()
@@ -189,7 +189,7 @@ mod tests {
     }
 
 
-    async fn test_successful_config_store_data_resolution(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_successful_config_store_data_resolution(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-crd-deployment";
@@ -209,7 +209,7 @@ mod tests {
         Ok(config)
 
     }
-    async fn test_successful_config_store_common_parameter(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_successful_config_store_common_parameter(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-crd-deployment-config-store-common-parameter";
@@ -232,7 +232,7 @@ mod tests {
         Ok(config)
 
     }
-    async fn test_successful_cluster_config_store_data_resolution(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_successful_cluster_config_store_data_resolution(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-crd-deployment-cluster-config-store";
@@ -253,7 +253,7 @@ mod tests {
 
     }
 
-    async fn test_client_error_config_store_data_resolution(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_client_error_config_store_data_resolution(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-error-config-store-data-resolution";
@@ -280,7 +280,7 @@ mod tests {
         Ok(String::from("Done"))
 
     }
-    async fn test_server_error_config_store_data_resolution(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_server_error_config_store_data_resolution(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-server-error-config-store-data-resolution";
@@ -307,7 +307,7 @@ mod tests {
         Ok(String::from("Done"))
 
     }
-    async fn test_config_store_returns_data_depending_on_params(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_config_store_returns_data_depending_on_params(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-server-error-config-store-data-resolution-based-on-params";
@@ -340,7 +340,7 @@ mod tests {
     }
 
 
-    async fn test_basic_reconcilation(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_basic_reconcilation(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-basic-reconcilation";
@@ -414,7 +414,7 @@ DB__CONFIG_LOG__LEVELS_1=DEBUG"#);
 
     }
 
-    async fn test_config_files_with_merging_reconcilation(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_config_files_with_merging_reconcilation(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-config-files-with-merging-reconcilation";
@@ -498,7 +498,7 @@ DB__CONFIG_TIMEOUT=1000"#);
 
     }
 
-    async fn test_basic_reconcilation_with_cluster_config_store(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_basic_reconcilation_with_cluster_config_store(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-basic-reconcilation-with-cluster-config-store";
@@ -572,7 +572,7 @@ DB__CONFIG_LOG__LEVELS_1=DEBUG"#);
 
     }
 
-    async fn test_config_files_with_merging_reconcilation_with_cluster_config_store(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_config_files_with_merging_reconcilation_with_cluster_config_store(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
 
         // Verify `ClusterConfigurationStore` CRD is deployed
         let store_name = "test-config-files-with-merging-reconcilation-with-cluster-config-store";
@@ -655,19 +655,19 @@ DB__CONFIG_TIMEOUT=1000"#);
         Ok(String::from("Done"))
 
     }
-    async fn test_other_feature(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_other_feature(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
         // Example subtest logic here
         // ...
         Ok("Other Feature Test successful".to_string())
     }
 
-    async fn test_other_feature2(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_other_feature2(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
         // Example subtest logic here
         // ...
         Ok("Other2 Feature Test successful".to_string())
     }
 
-    async fn test_other_feature3(ctx: Arc<Data>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
+    async fn test_other_feature3(ctx: Arc<Context>, fixture: &mut ControllerFixtures) -> Result<String, Error> {
         // Example subtest logic here
         // ...
         Ok("Other2 Feature Test successful".to_string())

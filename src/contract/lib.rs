@@ -21,6 +21,10 @@ pub enum Error {
     #[error("SerializationError: {0}")]
     EnvFileSerializationError(#[source] std::io::Error),
 
+
+    #[error("Http Server Error: {0}")]
+    HttpServerError(#[source] std::io::Error),
+
     #[error("Config Store Error: ")]
     ConfigStoreError(/* #[source] dyn std::error::Error)*/),
 
@@ -64,6 +68,9 @@ pub enum Error {
 
     #[error("Thread join error")]
     ThreadJoinError(#[source] JoinError),
+
+    #[error("Traceing Error")]
+    TracingError(),
 
 
 }

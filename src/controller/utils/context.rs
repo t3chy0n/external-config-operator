@@ -4,6 +4,7 @@ use kube::Client;
 use tokio::sync::Notify;
 use crate::contract::clients::K8sClient;
 use crate::controller::v1alpha1;
+use crate::observability::metrics::Metrics;
 
 pub struct ConfigurationManager {
 
@@ -34,8 +35,9 @@ impl DependencyContainer {
 }
 
 #[derive(Clone)]
-pub struct Data {
+pub struct Context {
     pub client: Arc<Client>,
     pub v1alpha1: Arc<v1alpha1::crd_client::CrdClient>,
-    pub api_client: Arc<v1alpha1::crd_client::CrdClient>
+    pub api_client: Arc<v1alpha1::crd_client::CrdClient>,
+    pub metrics: Arc<Metrics>,
 }

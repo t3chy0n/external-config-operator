@@ -11,23 +11,30 @@ use log::{debug, error, info, warn};
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 use crate::contract::clients::{K8sClient, CONTROLLER_LEASE_NAME};
-use crate::controller::utils::context::Data;
+use crate::controller::utils::context::Context;
 use crate::contract::lib::Error;
 
 pub struct LeaderElection {
     cancel_token: Arc<CancellationToken>,
-    ctx: Arc<Data>,
+    ctx: Arc<Context>,
 }
 
 
 impl LeaderElection {
-    pub fn new(cancel_token: Arc<CancellationToken>, ctx: Arc<Data>) -> Self {
+    pub fn new(cancel_token: Arc<CancellationToken>, ctx: Arc<Context>) -> Self {
         let namespace = env::var("KUBERNETES_NAMESPACE").unwrap_or_else(|_| "default".to_string());
 
         LeaderElection {
             cancel_token,
             ctx,
         }
+    }
+    pub fn enabled(&self) -> bool {
+        let has_namespace = env::var("KUBERNETES_NAMESPACE").map(|x| true).unwrap_or_else(|_| false);
+        let has_pod = env::var("KUBERNETES_POD_NAME").map(|x| true).unwrap_or_else(|_| false);
+
+        has_pod && has_namespace
+
     }
 
     async fn run_cancellable<F, Fut, T>(&self, f: F) -> Result<T, Error>
@@ -96,11 +103,6 @@ impl LeaderElection {
             Ok(())
         }).await;
 
-        // Optionally, you can attempt to release the lease here by deleting it or removing holder_identity
-        // match self.ctx.api_client.delete_lease(&CONTROLLER_LEASE_NAME, &Default::default(), &namespace.as_str()).await {
-        //     Ok(_) => info!("Lease released upon shutdown: {}", CONTROLLER_LEASE_NAME),
-        //     Err(e) => warn!("Failed to release lease on shutdown: {:?}", e),
-        // }
 
     }
 }

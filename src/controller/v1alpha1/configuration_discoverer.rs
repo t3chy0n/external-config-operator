@@ -20,7 +20,7 @@ use crate::controller::utils::file_format::{convert_to_format, convert_to_json, 
 use crate::contract::lib::{Error, Result};
 use crate::contract::ireconcilable::{IReconcilable, ReconcilableTargetTypeBounds};
 use crate::controller::controller::DOCUMENT_FINALIZER;
-use crate::controller::utils::context::Data;
+use crate::controller::utils::context::Context;
 use crate::controller::utils::crd::HasData;
 use crate::controller::v1alpha1::crd::claim::{HasTarget, Refreshable};
 use crate::controller::v1alpha1::crd::configuration_store::{ClusterConfigurationStore, ConfigurationStore, Provider};
@@ -31,7 +31,7 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
 {
     async fn compose_file(
         &self,
-        ctx: Arc<Data>,
+        ctx: Arc<Context>,
         claim_ref: &ClaimRef,
         namespace: &str,
         file: &str,
@@ -44,7 +44,7 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
     }
     async fn apply_merge_strategy(
         &self,
-        ctx: Arc<Data>,
+        ctx: Arc<Context>,
         claim_ref: &ClaimRef,
         namespace: &str,
         file: &str,
@@ -80,7 +80,7 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
 
     async fn apply_fallback_strategy(
         &self,
-        ctx: Arc<Data>,
+        ctx: Arc<Context>,
         claim_ref: &ClaimRef,
         namespace: &str,
         file: &str,
@@ -96,7 +96,7 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
     }
     async fn process_store_ref(
         &self,
-        ctx: Arc<Data>,
+        ctx: Arc<Context>,
         store_ref: &ClaimRefParametrization,
         namespace: &str,
         file: &str
@@ -123,7 +123,7 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
         convert_to_json(&parsed_config)
     }
 
-    async fn reconcile(&self, ctx: Arc<Data>) -> Result<Action> {
+    async fn reconcile(&self, ctx: Arc<Context>) -> Result<Action> {
         let client = ctx.client.clone();
         let namespace = <Self as ResourceExt>::namespace(self).unwrap();
         let name = self.name_any();
@@ -152,7 +152,7 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
         Ok(Action::requeue(self.get_refresh_interval()))
     }
 
-    async fn cleanup(&mut self, ctx: Arc<Data>) -> Result<Action> {
+    async fn cleanup(&mut self, ctx: Arc<Context>) -> Result<Action> {
         let client = ctx.client.clone();
         let namespace = <Self as ResourceExt>::namespace(self).unwrap();
         let target = self.get_target();
@@ -169,6 +169,6 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
         Ok(Action::await_change())
     }
 
-    async fn create_resource_spec(&self, ctx: Arc<Data>) -> Result<TargetType, Error>;
+    async fn create_resource_spec(&self, ctx: Arc<Context>) -> Result<TargetType, Error>;
 }
 

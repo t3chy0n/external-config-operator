@@ -21,27 +21,30 @@ use futures::stream::StreamExt;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::api::ApiResource;
 use serde_yaml::Value;
-use tracing::{error, info};
+use tracing::{error, field, info, Span};
 use crate::contract::ireconcilable::{ControllerReconcilableTargetTypeBounds, IReconcilable};
 use crate::contract::lib::Error;
-use crate::controller::utils::context::Data;
+use crate::controller::utils::context::Context;
 use crate::contract::lib::Result;
 use crate::controller::v1alpha1::controller::crds;
 use crate::controller::v1alpha1::crd::claim::{ConfigMapClaim, SecretClaim};
 use crate::controller::v1alpha1::crd::configuration_store::{ClusterConfigurationStore, ConfigurationStore};
+use crate::observability::telemetry;
 
 // #[instrument(skip(ctx, doc), fields(trace_id))]
 pub static DOCUMENT_FINALIZER: &str = "test.io/documents.kube3.rs";
 
-pub async fn reconcile<T >(resource: Arc<T>, ctx: Arc<Data>) -> Result<Action>
+pub async fn reconcile<T >(resource: Arc<T>, ctx: Arc<Context>) -> Result<Action>
 where
     T: ControllerReconcilableTargetTypeBounds,
-    Data: Send + Sync,
+    Context: Send + Sync,
 {
-    // let trace_id = telemetry::get_trace_id();
-    // Span::current().record("trace_id", &field::display(&trace_id));
-    // let _timer = ctx.metrics.reconcile.count_and_measure(&trace_id);
+    let trace_id = telemetry::get_trace_id();
+    Span::current().record("trace_id", &field::display(&trace_id));
+    let _timer = ctx.metrics.reconcile.count_and_measure(&trace_id);
+
     // ctx.diagnostics.write().await.last_event = Utc::now();
+
     let ns = resource.namespace().unwrap(); // doc is namespace scoped
     let resources: Api<T> = Api::namespaced((*ctx.client).clone(), &ns);
 
@@ -56,15 +59,16 @@ where
     .map_err(|e| Error::FinalizerError(Box::new(e)))
 }
 
-pub fn error_policy<T>(resource: Arc<T>, error: &Error, _ctx: Arc<Data>) -> Action
+pub fn error_policy<T>(resource: Arc<T>, error: &Error, ctx: Arc<Context>) -> Action
 where
     T: ControllerReconcilableTargetTypeBounds
 {
     error!("Error reconciling: {:?}", error);
+    ctx.metrics.reconcile.set_failure(resource.name_any(), error);
     Action::requeue(Duration::from_secs(60))
 }
 
-pub async fn run<T: Resource + IReconcilable>(data: Data)
+pub async fn run<T: Resource + IReconcilable>(data: Context)
 where
     T: ControllerReconcilableTargetTypeBounds
 {

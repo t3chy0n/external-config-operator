@@ -6,6 +6,7 @@ use crate::controller::v1alpha1::crd::claim::{ConfigMapClaim, SecretClaim};
 
 mod controller;
 mod contract;
+mod observability;
 fn main() {
     let crds = generate_crd_manifests();
 

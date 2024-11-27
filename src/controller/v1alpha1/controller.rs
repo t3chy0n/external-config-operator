@@ -1,13 +1,13 @@
 use futures::join;
 use kube::CustomResourceExt;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
-use crate::controller::utils::context::Data;
+use crate::controller::utils::context::Context;
 use crate::controller::controller::{run as startController};
 
 pub use super::crd::claim::{ConfigMapClaim, SecretClaim};
 pub use crate::controller::v1alpha1::crd::configuration_store::{ClusterConfigurationStore, ConfigurationStore};
 
-pub async fn run(data: Data)  {
+pub async fn run(data: Context)  {
     join![
         startController::<ConfigMapClaim>(data.clone()),
         startController::<SecretClaim>(data.clone())

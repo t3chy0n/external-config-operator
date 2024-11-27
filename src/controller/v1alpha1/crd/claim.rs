@@ -21,7 +21,7 @@ use tracing::info;
 use crate::contract::iconfigstore::IConfigStore;
 use crate::contract::ireconcilable::{IReconcilable, ReconcilableTargetTypeBounds};
 use crate::controller::utils::crd::{HasData, RefreshInterval};
-use crate::controller::utils::context::Data;
+use crate::controller::utils::context::Context;
 use crate::controller::v1alpha1::crd::configuration_store::{ClusterConfigurationStore, ConfigStoreFetcherAdapter, ConfigurationStore, Provider};
 use crate::contract::lib::{Error, Result};
 use crate::controller::controller::DOCUMENT_FINALIZER;
@@ -113,7 +113,7 @@ impl HasTarget for ConfigMapClaim {
 
 #[async_trait]
 impl ConfigurationDiscoverer<ConfigMap> for ConfigMapClaim {
-    async fn create_resource_spec(&self, ctx: Arc<Data>) -> std::result::Result<ConfigMap, Error> {
+    async fn create_resource_spec(&self, ctx: Arc<Context>) -> std::result::Result<ConfigMap, Error> {
         let name = self.spec.target.name.clone();
         let namespace = <Self as kube::ResourceExt>::namespace(self).unwrap();
         let mut data: BTreeMap<String, String> = BTreeMap::new();
@@ -172,7 +172,7 @@ impl Default for ClaimTargetRef {
 #[async_trait]
 impl IReconcilable for ConfigMapClaim {
 
-    async fn reconcile(&self,  ctx: Arc<Data>) -> Result<Action> {
+    async fn reconcile(&self, ctx: Arc<Context>) -> Result<Action> {
 
         let client = ctx.client.clone();
         match ConfigurationDiscoverer::<ConfigMap>::reconcile(self, ctx).await {
@@ -183,7 +183,7 @@ impl IReconcilable for ConfigMapClaim {
             }
         }
     }
-    async fn cleanup(&mut self,  ctx: Arc<Data>) -> Result<Action> {
+    async fn cleanup(&mut self, ctx: Arc<Context>) -> Result<Action> {
         ConfigurationDiscoverer::<ConfigMap>::cleanup(self, ctx).await
     }
 }
@@ -238,7 +238,7 @@ impl Default for ConfigurationSourceStatus {
 
 #[async_trait]
 impl ConfigurationDiscoverer<Secret> for SecretClaim {
-    async fn create_resource_spec(&self, ctx: Arc<Data>) -> std::result::Result<Secret, Error> {
+    async fn create_resource_spec(&self, ctx: Arc<Context>) -> std::result::Result<Secret, Error> {
         let name = self.spec.target.name.clone();
         let namespace = <Self as kube::ResourceExt>::namespace(self).unwrap();
         let mut data: BTreeMap<String, String> = BTreeMap::new();
@@ -291,7 +291,7 @@ impl Default for SecretClaim {
 impl IReconcilable for SecretClaim {
 
 
-    async fn reconcile(&self,  ctx: Arc<Data>) -> Result<Action> {
+    async fn reconcile(&self, ctx: Arc<Context>) -> Result<Action> {
 
         let client = ctx.client.clone();
         match ConfigurationDiscoverer::<Secret>::reconcile(self, ctx).await {
@@ -302,7 +302,7 @@ impl IReconcilable for SecretClaim {
             }
         }
     }
-    async fn cleanup(&mut self,  ctx: Arc<Data>) -> Result<Action> {
+    async fn cleanup(&mut self, ctx: Arc<Context>) -> Result<Action> {
 
         ConfigurationDiscoverer::<Secret>::cleanup(self, ctx).await
 

@@ -7,14 +7,14 @@ use kube::runtime::controller::Action;
 use kube::runtime::events::{Event, EventType, Recorder, Reporter};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use crate::controller::utils::context::Data;
+use crate::controller::utils::context::Context;
 use crate::controller::utils::crd::HasData;
 use super::lib::{Error, Result};
 
 #[async_trait]
 pub trait IReconcilable: Resource<DynamicType = ()> {
-    async fn reconcile(&self,  ctx: Arc<Data>) -> Result<Action>;
-    async fn cleanup(&mut self,  ctx: Arc<Data>) -> Result<Action>;
+    async fn reconcile(&self, ctx: Arc<Context>) -> Result<Action>;
+    async fn cleanup(&mut self, ctx: Arc<Context>) -> Result<Action>;
 
     async fn record_event(
         &self,

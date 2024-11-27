@@ -4,4 +4,5 @@ pub mod controller;
 pub mod leader_election;
 
 mod config_store;
+pub mod controller_data;
 
