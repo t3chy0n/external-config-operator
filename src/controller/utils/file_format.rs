@@ -1,24 +1,24 @@
-use std::collections::HashMap;
-use std::io::Cursor;
+use crate::contract::lib::Error;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use crate::contract::lib::Error;
+use std::collections::HashMap;
+use std::io::Cursor;
 
-use serde_json::Value as JsonValue;
-use toml::Value as TomlValue;
-use serde_yaml::Value as YamlValue;
-use std::str::FromStr;
-use json5;
+use crate::controller::utils::parsers::json_to_key_value::json_to_key_value_pairs;
 use config::{Config, File, FileFormat};
-use futures::StreamExt;
-use std::path::Path;
 use convert_case::{Case, Converter, Pattern};
 use dotenvy::{dotenv, Iter};
+use futures::StreamExt;
 use java_properties::{Line, PropertiesIter};
+use json5;
+use serde_json::Value as JsonValue;
 use serde_json::{Map, Value};
-use crate::controller::utils::parsers::json_to_key_value::json_to_key_value_pairs;
+use serde_yaml::Value as YamlValue;
+use std::path::Path;
+use std::str::FromStr;
+use toml::Value as TomlValue;
 
-#[derive( Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub enum ConfigFileType {
     Json,
     Json5,
@@ -34,8 +34,6 @@ pub enum ConfigFormat {
     Properties(HashMap<String, String>),
     EnvFile(HashMap<String, String>),
 }
-
-
 
 /// Merges two structured configurations together.
 /// Merges two JSON configurations together.
@@ -77,28 +75,13 @@ pub fn merge_configs(config1: ConfigFormat, config2: ConfigFormat) -> Result<Con
 /// Merges two structured configurations together.
 pub fn to_file_type(config1: &ConfigFormat) -> Result<ConfigFileType, Error> {
     match config1 {
-        ConfigFormat::Json(_)=> {
+        ConfigFormat::Json(_) => Ok(ConfigFileType::Json),
+        ConfigFormat::Toml(_) => Ok(ConfigFileType::Toml),
+        ConfigFormat::Yaml(_) => Ok(ConfigFileType::Yaml),
 
-            Ok(ConfigFileType::Json)
-        }
-        ConfigFormat::Toml(_) => {
+        ConfigFormat::Properties(_) => Ok(ConfigFileType::Properties),
 
-            Ok(ConfigFileType::Toml)
-        }
-        ConfigFormat::Yaml(_) => {
-
-            Ok(ConfigFileType::Yaml)
-        }
-
-        ConfigFormat::Properties(_)=> {
-
-            Ok(ConfigFileType::Properties)
-        }
-
-        ConfigFormat::EnvFile(_) => {
-
-            Ok(ConfigFileType::EnvFile)
-        }
+        ConfigFormat::EnvFile(_) => Ok(ConfigFileType::EnvFile),
 
         _ => Err(Error::UnsupportedFileType()),
     }
@@ -118,25 +101,26 @@ pub fn to_file_type_from_filename(filename: &str) -> Option<ConfigFileType> {
 }
 
 /// Converts a structured configuration format back to its string representation.
-pub fn convert_to_format(config : &ConfigFormat, file_type: &ConfigFileType) -> Result<String, Error> {
+pub fn convert_to_format(
+    config: &ConfigFormat,
+    file_type: &ConfigFileType,
+) -> Result<String, Error> {
     match (config, file_type) {
         (ConfigFormat::Json(json), ConfigFileType::Json | ConfigFileType::Json5) => {
             serde_json::to_string_pretty(&json).map_err(|r| Error::JsonSerializationError(r))
         }
         (ConfigFormat::Json(json), ConfigFileType::Toml) => {
-            let toml_val: TomlValue = serde_json::from_value::<TomlValue>(json.clone()).map_err(|e| Error::JsonSerializationError(e))?;
+            let toml_val: TomlValue = serde_json::from_value::<TomlValue>(json.clone())
+                .map_err(|e| Error::JsonSerializationError(e))?;
             toml::to_string(&toml_val).map_err(|e| Error::TomlSerializationError(e))
         }
         (ConfigFormat::Json(json), ConfigFileType::Yaml) => {
             serde_yaml::to_string(&json).map_err(|e| Error::YamlSerializationError(e))
         }
         (ConfigFormat::Json(json), ConfigFileType::Properties) => {
-
             let transforms = [];
 
-            let result = json_to_key_value_pairs(
-                json, '.', ".", &transforms
-            );
+            let result = json_to_key_value_pairs(json, '.', ".", &transforms);
 
             match result {
                 Ok(key_value_map) => {
@@ -146,33 +130,26 @@ pub fn convert_to_format(config : &ConfigFormat, file_type: &ConfigFileType) -> 
                         .collect::<Vec<String>>()
                         .join("\n");
                     Ok(result)
-                },
-                Err(e) => Err(e)
+                }
+                Err(e) => Err(e),
             }
-
         }
-        (ConfigFormat::Json(json), ConfigFileType::EnvFile ) => {
+        (ConfigFormat::Json(json), ConfigFileType::EnvFile) => {
+            let transforms = [Case::UpperSnake];
 
-            let transforms = [ Case::UpperSnake];
-
-            let result = json_to_key_value_pairs(
-                json, '_', "__", &transforms
-            );
+            let result = json_to_key_value_pairs(json, '_', "__", &transforms);
 
             match result {
                 Ok(key_value_map) => {
                     let result = key_value_map
                         .into_iter()
-                        .map(|(k, v)|
-                            format!("{}={}", k, v
-                            ))
+                        .map(|(k, v)| format!("{}={}", k, v))
                         .collect::<Vec<String>>()
                         .join("\n");
                     Ok(result)
-                },
-                Err(e) => Err(e)
+                }
+                Err(e) => Err(e),
             }
-
         }
         _ => Err(Error::UnsupportedFileType()),
     }
@@ -185,22 +162,26 @@ pub fn convert_to_json(config: &ConfigFormat) -> Result<ConfigFormat, Error> {
         }
         ConfigFormat::Toml(toml_value) => {
             // Convert TOML to JSON
-            let json: JsonValue = serde_json::to_value(toml_value).map_err(|e| Error::JsonSerializationError(e))?;
+            let json: JsonValue =
+                serde_json::to_value(toml_value).map_err(|e| Error::JsonSerializationError(e))?;
             Ok(ConfigFormat::Json(json))
         }
         ConfigFormat::Yaml(yaml_value) => {
             // Convert YAML to JSON
-            let json: JsonValue = serde_json::to_value(yaml_value).map_err(|e| Error::JsonSerializationError(e))?;
+            let json: JsonValue =
+                serde_json::to_value(yaml_value).map_err(|e| Error::JsonSerializationError(e))?;
             Ok(ConfigFormat::Json(json))
         }
         ConfigFormat::EnvFile(env_map) => {
             // Convert Properties or EnvFile (key-value pairs) to JSON
-            let json: JsonValue = serde_json::to_value(env_map).map_err(|e| Error::JsonSerializationError(e))?;
+            let json: JsonValue =
+                serde_json::to_value(env_map).map_err(|e| Error::JsonSerializationError(e))?;
             Ok(ConfigFormat::Json(json))
         }
-        ConfigFormat::Properties(properties_map)  => {
+        ConfigFormat::Properties(properties_map) => {
             // Convert Properties or EnvFile (key-value pairs) to JSON
-            let json: JsonValue = serde_json::to_value(properties_map).map_err(|e| Error::JsonSerializationError(e))?;
+            let json: JsonValue = serde_json::to_value(properties_map)
+                .map_err(|e| Error::JsonSerializationError(e))?;
             Ok(ConfigFormat::Json(json))
         }
     }
@@ -222,7 +203,6 @@ fn merge_json(target: &mut JsonValue, source: &JsonValue) {
         }
     }
 }
-
 
 /// Helper function to merge TOML values.
 fn merge_toml(target: &mut TomlValue, source: &TomlValue) {

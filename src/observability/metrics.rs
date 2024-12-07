@@ -1,4 +1,4 @@
-
+use crate::contract::lib::Error;
 use kube::ResourceExt;
 use opentelemetry::trace::TraceId;
 use prometheus_client::{
@@ -8,11 +8,9 @@ use prometheus_client::{
 };
 use std::sync::Arc;
 use tokio::time::Instant;
-use crate::contract::lib::Error;
 
 #[derive(Clone)]
-pub struct Metrics
-{
+pub struct Metrics {
     pub reconcile: ReconcileMetrics,
     pub registry: Arc<Registry>,
 }
@@ -46,20 +44,20 @@ impl TryFrom<&TraceId> for TraceLabel {
 }
 
 #[derive(Clone)]
-pub struct ReconcileMetrics
-{
+pub struct ReconcileMetrics {
     pub runs: Family<(), Counter>,
     pub failures: Family<ErrorLabels, Counter>,
     pub duration: HistogramWithExemplars<TraceLabel>,
 }
 
-impl Default for ReconcileMetrics
-{
+impl Default for ReconcileMetrics {
     fn default() -> Self {
         Self {
             runs: Family::<(), Counter>::default(),
             failures: Family::<ErrorLabels, Counter>::default(),
-            duration: HistogramWithExemplars::new([0.01, 0.1, 0.25, 0.5, 1., 5., 15., 60.].into_iter()),
+            duration: HistogramWithExemplars::new(
+                [0.01, 0.1, 0.25, 0.5, 1., 5., 15., 60.].into_iter(),
+            ),
         }
     }
 }

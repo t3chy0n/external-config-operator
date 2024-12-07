@@ -1,11 +1,13 @@
-use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
-use kube::{Api, Client, CustomResourceExt, ResourceExt};
-use kube::api::PostParams;
-use crate::controller::v1alpha1::crd::configuration_store::{ConfigurationStore, ClusterConfigurationStore};
 use crate::controller::v1alpha1::crd::claim::{ConfigMapClaim, SecretClaim};
+use crate::controller::v1alpha1::crd::configuration_store::{
+    ClusterConfigurationStore, ConfigurationStore,
+};
+use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
+use kube::api::PostParams;
+use kube::{Api, Client, CustomResourceExt, ResourceExt};
 
-mod controller;
 mod contract;
+mod controller;
 mod observability;
 fn main() {
     let crds = generate_crd_manifests();
@@ -34,8 +36,10 @@ fn generate_crd_manifests() -> Vec<CustomResourceDefinition> {
     crds
 }
 
-
-async fn apply_crd(client: &Client, crd: &CustomResourceDefinition) -> Result<(), Box<dyn std::error::Error>> {
+async fn apply_crd(
+    client: &Client,
+    crd: &CustomResourceDefinition,
+) -> Result<(), Box<dyn std::error::Error>> {
     let crd_yaml = serde_yaml::to_string(&crd)?;
     println!("{crd_yaml}");
     println!("---");
@@ -56,8 +60,6 @@ async fn apply_crd(client: &Client, crd: &CustomResourceDefinition) -> Result<()
     }
 }
 
-
-
 async fn apply_all_crds(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
     let crds = generate_crd_manifests();
     for crd in crds.iter() {
@@ -66,4 +68,3 @@ async fn apply_all_crds(client: &Client) -> Result<(), Box<dyn std::error::Error
 
     Ok(())
 }
-

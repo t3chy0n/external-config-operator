@@ -1,12 +1,12 @@
-use std::collections::BTreeMap;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use schemars::JsonSchema;
-use schemars::schema::{InstanceType, Metadata, Schema, SchemaObject};
 use chrono::Duration;
-use std::str::FromStr;
 use k8s_openapi::api::core::v1::{ConfigMap, Secret};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+use schemars::schema::{InstanceType, Metadata, Schema, SchemaObject};
+use schemars::JsonSchema;
 use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::BTreeMap;
+use std::str::FromStr;
 #[derive(Debug, Clone, PartialEq)]
 pub struct RefreshInterval(Duration);
 
@@ -40,7 +40,7 @@ impl FromStr for RefreshInterval {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match humantime::parse_duration(s) {
             Ok(d) => Ok(RefreshInterval(Duration::from_std(d).unwrap())),
-            Err(e) => Err(e),  // Directly return the humantime error
+            Err(e) => Err(e), // Directly return the humantime error
         }
     }
 }
@@ -59,7 +59,7 @@ impl JsonSchema for RefreshInterval {
             })),
             ..Default::default()
         }
-            .into()
+        .into()
     }
 }
 
@@ -83,7 +83,6 @@ impl<'de> Deserialize<'de> for RefreshInterval {
     }
 }
 
-
 pub trait HasData {
     fn get_data(&self) -> Option<BTreeMap<String, String>>;
     fn get_metadata_mut(&mut self) -> &mut ObjectMeta;
@@ -100,7 +99,7 @@ impl HasData for ConfigMap {
 
 impl HasData for Secret {
     fn get_data(&self) -> Option<BTreeMap<String, String>> {
-       self.data.as_ref().map(|data| {
+        self.data.as_ref().map(|data| {
             data.iter()
                 .map(|(k, v)| {
                     // Convert the ByteString into &[u8] and then to a String

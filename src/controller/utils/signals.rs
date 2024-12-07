@@ -1,18 +1,18 @@
-use std::ops::Deref;
-use std::sync::{ Arc};
 use log::info;
+use std::ops::Deref;
+use std::sync::Arc;
 use tokio::signal;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_util::sync::CancellationToken;
 
-pub fn notify_cancellation_token(token: &Arc<CancellationToken>, mut shutdown_recv: UnboundedReceiver<()>){
-
-
+pub fn notify_cancellation_token(
+    token: &Arc<CancellationToken>,
+    mut shutdown_recv: UnboundedReceiver<()>,
+) {
     tokio::spawn({
         let token = token.clone();
-
 
         async move {
             //TODO: Unlikely it will run on windows node, but for that case its unsafe
@@ -29,9 +29,7 @@ pub fn notify_cancellation_token(token: &Arc<CancellationToken>, mut shutdown_re
                 }
             }
 
-
             token.cancel();
         }
     });
-
 }

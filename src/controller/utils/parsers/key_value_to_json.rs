@@ -1,8 +1,6 @@
+use convert_case::{Case, Casing};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use convert_case::{Case, Casing};
-
-
 
 fn insert_into_map(
     current_map: &mut Map<String, Value>,
@@ -12,8 +10,6 @@ fn insert_into_map(
     separator: char,
 ) {
     let part = parts[0];
-
-
 
     if let Ok(index) = part.parse::<usize>() {
         if None == parent {
@@ -35,7 +31,13 @@ fn insert_into_map(
     }
 }
 
-fn handle_string_part(current_map: &mut Map<String, Value>, parts: &[&str], value: &str, separator: char, part: &str) {
+fn handle_string_part(
+    current_map: &mut Map<String, Value>,
+    parts: &[&str],
+    value: &str,
+    separator: char,
+    part: &str,
+) {
     let entry = current_map
         .entry(part.to_string())
         .or_insert_with(|| Value::Object(Map::new()));
@@ -48,14 +50,20 @@ fn handle_string_part(current_map: &mut Map<String, Value>, parts: &[&str], valu
         if let Value::Object(obj) = entry {
             insert_into_map(obj, Some(parts[0]), &parts[1..], value, separator);
         } else {
-           // panic!("Expected object but found a different value");
+            // panic!("Expected object but found a different value");
         }
     }
 }
 
 //TODO: Fix this, inner object with index nunber is created rather to insert to array at current value.
-fn handle_numeric_part(current_array: &mut Value, parts: &[&str], value: &str, separator: char, part: &str, index: usize) {
-
+fn handle_numeric_part(
+    current_array: &mut Value,
+    parts: &[&str],
+    value: &str,
+    separator: char,
+    part: &str,
+    index: usize,
+) {
     if let Value::Array(current_array) = current_array {
         if parts.len() == 1 {
             // We're at the last part, insert the value
@@ -80,11 +88,10 @@ fn handle_numeric_part(current_array: &mut Value, parts: &[&str], value: &str, s
 }
 
 fn transform_key_part(part: String, transforms: &[Case]) -> String {
-    transforms.iter().fold(part.to_string(), |acc, &case| {
-        acc.to_case(case)
-    })
+    transforms
+        .iter()
+        .fold(part.to_string(), |acc, &case| acc.to_case(case))
 }
-
 
 // Custom function to split a string with escape character handling
 fn split_with_escape(s: &str, separator: char, escape_char: char) -> Vec<String> {
@@ -96,7 +103,7 @@ fn split_with_escape(s: &str, separator: char, escape_char: char) -> Vec<String>
     while let Some(c) = chars.next() {
         let is_nex_char_separator = match chars.peek() {
             Some(c) => c.clone() == separator,
-            None => false
+            None => false,
         };
 
         if escape_next {
@@ -132,7 +139,6 @@ pub fn key_value_pairs_to_json(
 
     for (key, value) in properties {
         let parts: Vec<String> = if let Some(escape_seq) = escape {
-
             // Ensure the escape sequence is a single character
             assert!(
                 escape_seq.chars().count() == 1,
@@ -141,7 +147,6 @@ pub fn key_value_pairs_to_json(
 
             // Use a custom splitting function instead of regex
             split_with_escape(&key, separator, escape_seq.chars().next().unwrap())
-
         } else {
             key.split(separator).map(|s| s.to_string()).collect()
         };
@@ -151,7 +156,16 @@ pub fn key_value_pairs_to_json(
             .map(|part| transform_key_part(part, transforms))
             .collect();
 
-        insert_into_map(&mut map, None, &transformed_parts.iter().map(AsRef::as_ref).collect::<Vec<&str>>(), &value, separator);
+        insert_into_map(
+            &mut map,
+            None,
+            &transformed_parts
+                .iter()
+                .map(AsRef::as_ref)
+                .collect::<Vec<&str>>(),
+            &value,
+            separator,
+        );
     }
 
     map

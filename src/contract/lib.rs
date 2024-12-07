@@ -3,7 +3,7 @@ use kube::core::ErrorResponse;
 use thiserror::Error;
 use tokio::task::JoinError;
 
-pub type Result<T, E = Error > = std::result::Result<T, E >;
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("SerializationError: {0}")]
@@ -15,12 +15,10 @@ pub enum Error {
     #[error("SerializationError: {0}")]
     YamlSerializationError(#[source] serde_yaml::Error),
     #[error("SerializationError: {0}")]
-
     PropertiesSerializationError(#[source] PropertiesError),
 
     #[error("SerializationError: {0}")]
     EnvFileSerializationError(#[source] std::io::Error),
-
 
     #[error("Http Server Error: {0}")]
     HttpServerError(#[source] std::io::Error),
@@ -29,7 +27,7 @@ pub enum Error {
     ConfigStoreError(/* #[source] dyn std::error::Error)*/),
 
     #[error("Http Store Error: {0} ")]
-    HttpConfigStoreError( #[source] reqwest::Error),
+    HttpConfigStoreError(#[source] reqwest::Error),
 
     #[error("Http Store Client Error: {0} ")]
     HttpConfigStoreClientError(#[source] std::io::Error),
@@ -48,7 +46,7 @@ pub enum Error {
 
     #[error("Another pod holds the lease")]
     LeaseHeldByAnotherPod(),
-    
+
     #[error("Operation was cancelled")]
     Cancelled,
 
@@ -71,10 +69,7 @@ pub enum Error {
 
     #[error("Traceing Error")]
     TracingError(),
-
-
 }
-
 
 impl Error {
     pub fn metric_label(&self) -> String {

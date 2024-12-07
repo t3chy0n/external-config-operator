@@ -1,11 +1,11 @@
 #[cfg(test)]
 pub mod tests {
-    use std::collections::HashMap;
-    use std::sync::Arc;
     use crate::controller::controller::apply_from_yaml;
     use kube::Client;
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use std::collections::HashMap;
+    use std::sync::Arc;
     use wiremock::matchers::{method, path, query_param};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[derive(Clone)]
     pub struct MockConfig {
@@ -15,7 +15,11 @@ pub mod tests {
     }
 
     impl MockConfig {
-        pub fn new(status_code: u16, response_body: &str, query_params: Option<HashMap<String, String>>) -> Self {
+        pub fn new(
+            status_code: u16,
+            response_body: &str,
+            query_params: Option<HashMap<String, String>>,
+        ) -> Self {
             MockConfig {
                 status_code,
                 response_body: response_body.to_string(),
@@ -27,58 +31,61 @@ pub mod tests {
             MockConfig {
                 status_code: 200,
                 response_body: String::from("{}"),
-                query_params: None
+                query_params: None,
             }
         }
         pub fn query_param_response(param: &str, value: &str, response: &str) -> Self {
             let mut query_params = HashMap::new();
-            query_params.insert(String::from(param),String::from(value));
+            query_params.insert(String::from(param), String::from(value));
             MockConfig {
                 status_code: 200,
                 response_body: String::from(response),
-                query_params: Some(query_params)
+                query_params: Some(query_params),
             }
         }
-        pub fn query_params_response(query_params: HashMap<String, String>, response: &str) -> Self {
+        pub fn query_params_response(
+            query_params: HashMap<String, String>,
+            response: &str,
+        ) -> Self {
             MockConfig {
                 status_code: 200,
                 response_body: String::from(response),
-                query_params: Some(query_params)
+                query_params: Some(query_params),
             }
         }
         pub fn success_with_body(body: &str) -> Self {
             MockConfig {
                 status_code: 200,
                 response_body: String::from(body),
-                query_params: None
+                query_params: None,
             }
         }
         pub fn not_found_with_body(body: &str) -> Self {
             MockConfig {
                 status_code: 404,
                 response_body: String::from(body),
-                query_params: None
+                query_params: None,
             }
         }
         pub fn not_found() -> Self {
             MockConfig {
                 status_code: 404,
                 response_body: String::from(""),
-                query_params: None
+                query_params: None,
             }
         }
         pub fn internal_server_error_with_body(body: &str) -> Self {
             MockConfig {
                 status_code: 500,
                 response_body: String::from(body),
-                query_params: None
+                query_params: None,
             }
         }
         pub fn internal_server_error() -> Self {
             MockConfig {
                 status_code: 500,
                 response_body: String::from("body"),
-                query_params: None
+                query_params: None,
             }
         }
     }
@@ -121,9 +128,11 @@ pub mod tests {
                 }
 
                 // Set the response for this specific configuration
-                mock.respond_with(ResponseTemplate::new(config.status_code).set_body_string(config.response_body))
-                    .mount(&mock_server)
-                    .await;
+                mock.respond_with(
+                    ResponseTemplate::new(config.status_code).set_body_string(config.response_body),
+                )
+                .mount(&mock_server)
+                .await;
             }
 
             let uri = mock_server.address().to_string();
@@ -147,7 +156,12 @@ pub mod tests {
             }
         }
 
-        pub async fn add_configuration_store(&mut self, name: &str, namespace: &str, configs: Vec<MockConfig>) -> &Self {
+        pub async fn add_configuration_store(
+            &mut self,
+            name: &str,
+            namespace: &str,
+            configs: Vec<MockConfig>,
+        ) -> &Self {
             let mock_url = self.mock_manager.create_mock_server(name, configs).await;
 
             self.resources.push(ResourceFixture {
@@ -160,7 +174,11 @@ pub mod tests {
             self
         }
 
-        pub async fn add_cluster_configuration_store(&mut self, name: &str, configs: Vec<MockConfig>) -> &Self {
+        pub async fn add_cluster_configuration_store(
+            &mut self,
+            name: &str,
+            configs: Vec<MockConfig>,
+        ) -> &Self {
             let mock_url = self.mock_manager.create_mock_server(name, configs).await;
 
             let mut query_params = HashMap::new();
@@ -168,7 +186,6 @@ pub mod tests {
 
             let mut headers = HashMap::new();
             headers.insert(String::from("cluster_store_header"), String::from("test"));
-
 
             self.resources.push(ResourceFixture {
                 name: name.to_string(),
@@ -199,7 +216,7 @@ pub mod tests {
             &mut self,
             name: &str,
             namespace: &str,
-            data: HashMap<String, String>
+            data: HashMap<String, String>,
         ) -> &Self {
             self.resources.push(ResourceFixture {
                 name: name.to_string(),
@@ -212,10 +229,10 @@ pub mod tests {
         }
 
         pub async fn build(&self) {
-
             for resource in &self.resources {
                 let yaml = match resource.kind.as_str() {
-                    "ConfigurationStore" | "ClusterConfigurationStore" => format!(r#"
+                    "ConfigurationStore" | "ClusterConfigurationStore" => format!(
+                        r#"
                         apiVersion: external-config.com/v1alpha1
                         kind: {}
                         metadata:
@@ -230,12 +247,20 @@ pub mod tests {
                               headers:
                                 store_header: test
                     "#,
-                      resource.kind, resource.name,
-                      resource.namespace.as_ref().map(|ns| format!("namespace: {}", ns)).unwrap_or_default(),
-                      resource.provider_url.as_ref().unwrap()),
+                        resource.kind,
+                        resource.name,
+                        resource
+                            .namespace
+                            .as_ref()
+                            .map(|ns| format!("namespace: {}", ns))
+                            .unwrap_or_default(),
+                        resource.provider_url.as_ref().unwrap()
+                    ),
 
                     "ConfigMapClaim" => {
-                        let data_yaml = resource.data.as_ref()
+                        let data_yaml = resource
+                            .data
+                            .as_ref()
                             .map(|data| {
                                 data.iter()
                                     .map(|(k, v)| format!("    {}: {}", k, v)) // Use 4 spaces for each line in the `data` section
@@ -245,9 +270,11 @@ pub mod tests {
                             .unwrap_or_default();
 
                         Self::format_config_map_claim(resource, data_yaml)
-                    },
+                    }
                     "SecretClaim" => {
-                        let data_yaml = resource.data.as_ref()
+                        let data_yaml = resource
+                            .data
+                            .as_ref()
                             .map(|data| {
                                 data.iter()
                                     .map(|(k, v)| format!("    {}: {}", k, v)) // Use 4 spaces for each line in the `data` section
@@ -257,7 +284,7 @@ pub mod tests {
                             .unwrap_or_default();
 
                         Self::format_secret_claim(resource, data_yaml)
-                    },
+                    }
                     _ => continue,
                 };
                 apply_from_yaml(self.client.clone(), &yaml).await.unwrap();
@@ -265,7 +292,8 @@ pub mod tests {
         }
 
         fn format_config_map_claim(resource: &ResourceFixture, data_yaml: String) -> String {
-            format!(r#"
+            format!(
+                r#"
 apiVersion: external-config.com/v1alpha1
 kind: ConfigMapClaim
 metadata:
@@ -280,10 +308,16 @@ spec:
     name: {}
 
   refreshInterval: 5m
-"#, resource.name, resource.namespace.as_ref().unwrap(), data_yaml, resource.name)
+"#,
+                resource.name,
+                resource.namespace.as_ref().unwrap(),
+                data_yaml,
+                resource.name
+            )
         }
         fn format_secret_claim(resource: &ResourceFixture, data_yaml: String) -> String {
-            format!(r#"
+            format!(
+                r#"
 apiVersion: external-config.com/v1alpha1
 kind: SecretClaim
 metadata:
@@ -297,16 +331,27 @@ spec:
     name: {}
 
   refreshInterval: 5m
-"#, resource.name, resource.namespace.as_ref().unwrap(), data_yaml, resource.name)
+"#,
+                resource.name,
+                resource.namespace.as_ref().unwrap(),
+                data_yaml,
+                resource.name
+            )
         }
 
-        pub async fn prepare_single_config_store_claim_scenario(&mut self, prefix: &str, configs: Vec<MockConfig>) {
-
-            let mut cmcData =  HashMap::new();
+        pub async fn prepare_single_config_store_claim_scenario(
+            &mut self,
+            prefix: &str,
+            configs: Vec<MockConfig>,
+        ) {
+            let mut cmcData = HashMap::new();
             let formats = vec!["json", "yaml", "toml", "properties", "env"];
 
             for format in formats {
-                cmcData.insert(format!("config.{}", format), String::from(format!(r#"
+                cmcData.insert(
+                    format!("config.{}", format),
+                    String::from(format!(
+                        r#"
                   from:
                     - configurationStoreRef:
                         kind: ConfigurationStore
@@ -316,35 +361,44 @@ spec:
                         testParam2: asd
 
                   strategy: Merge
-            "#, prefix)));
+            "#,
+                        prefix
+                    )),
+                );
             }
 
-
-
             let namespace = "default";
-            self.add_configuration_store(
-                format!("{}-store", prefix).as_str(), namespace, configs
-            ).await;
+            self.add_configuration_store(format!("{}-store", prefix).as_str(), namespace, configs)
+                .await;
 
             self.add_config_map_claim(
-                format!("{}-cmc", prefix).as_str(), namespace, cmcData.clone()
+                format!("{}-cmc", prefix).as_str(),
+                namespace,
+                cmcData.clone(),
             );
 
             self.add_secret_claim(
-                format!("{}-sc", prefix).as_str(), namespace, cmcData.clone()
+                format!("{}-sc", prefix).as_str(),
+                namespace,
+                cmcData.clone(),
             )
-            .build().await
-
-
+            .build()
+            .await
         }
 
-        pub async fn prepare_config_store_claim_with_merge_scenario(&mut self, prefix: &str, configs: Vec<MockConfig>) {
-
-            let mut cmcData =  HashMap::new();
+        pub async fn prepare_config_store_claim_with_merge_scenario(
+            &mut self,
+            prefix: &str,
+            configs: Vec<MockConfig>,
+        ) {
+            let mut cmcData = HashMap::new();
             let formats = vec!["json", "yaml", "toml", "properties", "env"];
 
             for format in formats {
-                cmcData.insert(format!("config.{}", format), String::from(format!(r#"
+                cmcData.insert(
+                    format!("config.{}", format),
+                    String::from(format!(
+                        r#"
                   from:
                     - configurationStoreRef:
                         kind: ConfigurationStore
@@ -364,36 +418,44 @@ spec:
 
 
                   strategy: Merge
-            "#, prefix, prefix, prefix)));
+            "#,
+                        prefix, prefix, prefix
+                    )),
+                );
             }
 
-
-
             let namespace = "default";
-            self.add_configuration_store(
-                format!("{}-store", prefix).as_str(), namespace, configs
-            ).await;
+            self.add_configuration_store(format!("{}-store", prefix).as_str(), namespace, configs)
+                .await;
 
             self.add_config_map_claim(
-                format!("{}-cmc", prefix).as_str(), namespace, cmcData.clone()
+                format!("{}-cmc", prefix).as_str(),
+                namespace,
+                cmcData.clone(),
             );
 
             self.add_secret_claim(
-                format!("{}-sc", prefix).as_str(), namespace, cmcData.clone()
+                format!("{}-sc", prefix).as_str(),
+                namespace,
+                cmcData.clone(),
             )
-            .build().await
-
-
+            .build()
+            .await
         }
 
-
-        pub async fn prepare_single_cluster_config_store_claim_scenario(&mut self, prefix: &str, configs: Vec<MockConfig>) {
-
-            let mut cmcData =  HashMap::new();
+        pub async fn prepare_single_cluster_config_store_claim_scenario(
+            &mut self,
+            prefix: &str,
+            configs: Vec<MockConfig>,
+        ) {
+            let mut cmcData = HashMap::new();
             let formats = vec!["json", "yaml", "toml", "properties", "env"];
 
             for format in formats {
-                cmcData.insert(format!("config.{}", format), String::from(format!(r#"
+                cmcData.insert(
+                    format!("config.{}", format),
+                    String::from(format!(
+                        r#"
                   from:
                     - configurationStoreRef:
                         kind: ClusterConfigurationStore
@@ -403,35 +465,44 @@ spec:
                         testParam2: asd
 
                   strategy: Merge
-            "#, prefix)));
+            "#,
+                        prefix
+                    )),
+                );
             }
 
-
-
             let namespace = "default";
-            self.add_cluster_configuration_store(
-                format!("{}-store", prefix).as_str(), configs
-            ).await;
+            self.add_cluster_configuration_store(format!("{}-store", prefix).as_str(), configs)
+                .await;
 
             self.add_config_map_claim(
-                format!("{}-cmc", prefix).as_str(), namespace, cmcData.clone()
+                format!("{}-cmc", prefix).as_str(),
+                namespace,
+                cmcData.clone(),
             );
 
             self.add_secret_claim(
-                format!("{}-sc", prefix).as_str(), namespace, cmcData.clone()
+                format!("{}-sc", prefix).as_str(),
+                namespace,
+                cmcData.clone(),
             )
-                .build().await
-
-
+            .build()
+            .await
         }
 
-        pub async fn prepare_cluster_config_store_claim_with_merge_scenario(&mut self, prefix: &str, configs: Vec<MockConfig>) {
-
-            let mut cmcData =  HashMap::new();
+        pub async fn prepare_cluster_config_store_claim_with_merge_scenario(
+            &mut self,
+            prefix: &str,
+            configs: Vec<MockConfig>,
+        ) {
+            let mut cmcData = HashMap::new();
             let formats = vec!["json", "yaml", "toml", "properties", "env"];
 
             for format in formats {
-                cmcData.insert(format!("config.{}", format), String::from(format!(r#"
+                cmcData.insert(
+                    format!("config.{}", format),
+                    String::from(format!(
+                        r#"
                   from:
                     - configurationStoreRef:
                         kind: ClusterConfigurationStore
@@ -451,27 +522,29 @@ spec:
 
 
                   strategy: Merge
-            "#, prefix, prefix, prefix)));
+            "#,
+                        prefix, prefix, prefix
+                    )),
+                );
             }
 
-
-
             let namespace = "default";
-            self.add_cluster_configuration_store(
-                format!("{}-store", prefix).as_str(), configs
-            ).await;
+            self.add_cluster_configuration_store(format!("{}-store", prefix).as_str(), configs)
+                .await;
 
             self.add_config_map_claim(
-                format!("{}-cmc", prefix).as_str(), namespace, cmcData.clone()
+                format!("{}-cmc", prefix).as_str(),
+                namespace,
+                cmcData.clone(),
             );
 
             self.add_secret_claim(
-                format!("{}-sc", prefix).as_str(), namespace, cmcData.clone()
+                format!("{}-sc", prefix).as_str(),
+                namespace,
+                cmcData.clone(),
             )
-                .build().await
-
-
+            .build()
+            .await
         }
-
     }
 }

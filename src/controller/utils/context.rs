@@ -1,14 +1,13 @@
-use std::cell::OnceCell;
-use std::sync::Arc;
-use kube::Client;
-use tokio::sync::Notify;
 use crate::contract::clients::K8sClient;
 use crate::controller::v1alpha1;
 use crate::observability::metrics::Metrics;
+use kube::Client;
+use std::cell::OnceCell;
+use std::sync::Arc;
+use tokio::sync::Notify;
+use crate::controller::utils::config::Config;
 
-pub struct ConfigurationManager {
-
-}
+pub struct ConfigurationManager {}
 
 impl ConfigurationManager {
     pub fn new() -> Self {
@@ -17,20 +16,21 @@ impl ConfigurationManager {
 }
 
 pub struct DependencyContainer {
-    config: OnceCell<ConfigurationManager>
+    config: OnceCell<ConfigurationManager>,
 }
 
 impl DependencyContainer {
     pub fn new() -> Self {
         Self {
-            config: OnceCell::new()
+            config: OnceCell::new(),
         }
     }
     fn create_configuration_manager(&self) -> ConfigurationManager {
         ConfigurationManager::new()
     }
     pub fn config_manager(&self) -> &ConfigurationManager {
-        self.config.get_or_init(|| self.create_configuration_manager())
+        self.config
+            .get_or_init(|| self.create_configuration_manager())
     }
 }
 

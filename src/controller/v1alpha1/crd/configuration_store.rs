@@ -1,13 +1,17 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use crate::contract::iconfigstore::IConfigStore;
+use crate::contract::lib::Error;
+use crate::controller::config_store::http_store::{
+    HttpConfigStore, HttpConfigStoreConnectionDetails,
+};
+use crate::controller::config_store::vault_store::{
+    VaultConfigStore, VaultConfigStoreConnectionDetails,
+};
 use async_trait::async_trait;
 use kube::{Client, CustomResource};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use crate::contract::iconfigstore::IConfigStore;
-use crate::contract::lib::Error;
-use crate::controller::config_store::http_store::{HttpConfigStore, HttpConfigStoreConnectionDetails};
-use crate::controller::config_store::vault_store::{VaultConfigStore, VaultConfigStoreConnectionDetails};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 // Define the config_store enum
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
@@ -20,8 +24,12 @@ pub enum Provider {
 impl Provider {
     pub fn get_config_store(&self) -> Box<dyn IConfigStore> {
         match &self {
-            Provider::Http(http_config) => Box::new(HttpConfigStore::new(CrdConfigMapper::map_http_config(http_config.clone()))),
-            Provider::Vault(vault_config) => Box::new(VaultConfigStore::new(CrdConfigMapper::map_vault_config(vault_config.clone()))),
+            Provider::Http(http_config) => Box::new(HttpConfigStore::new(
+                CrdConfigMapper::map_http_config(http_config.clone()),
+            )),
+            Provider::Vault(vault_config) => Box::new(VaultConfigStore::new(
+                CrdConfigMapper::map_vault_config(vault_config.clone()),
+            )),
         }
     }
 }
@@ -33,8 +41,8 @@ pub struct HttpConfig {
     pub base_url: String,
     pub path: Option<String>,
     pub protocol: Option<String>,
-    pub headers : Option<HashMap<String, String>>,
-    pub query_params : Option<HashMap<String, String>>
+    pub headers: Option<HashMap<String, String>>,
+    pub query_params: Option<HashMap<String, String>>,
 }
 
 // Define Vault-specific configuration
@@ -45,14 +53,23 @@ pub struct VaultConfig {
 }
 
 #[derive(CustomResource, Debug, Clone, Deserialize, Serialize, JsonSchema)]
-#[kube(group = "external-config.com", version="v1alpha1", kind = "ConfigurationStore", namespaced )]
+#[kube(
+    group = "external-config.com",
+    version = "v1alpha1",
+    kind = "ConfigurationStore",
+    namespaced
+)]
 #[kube(status = "ConfigurationSourceStatus")]
 pub struct ConfigurationStoreSpec {
     pub provider: Provider,
 }
 
 #[derive(CustomResource, Debug, Clone, Deserialize, Serialize, JsonSchema)]
-#[kube(group = "external-config.com", version="v1alpha1", kind = "ClusterConfigurationStore" )]
+#[kube(
+    group = "external-config.com",
+    version = "v1alpha1",
+    kind = "ClusterConfigurationStore"
+)]
 #[kube(status = "ConfigurationSourceStatus")]
 pub struct ClusterConfigurationStoreSpec {
     pub provider: Provider,
@@ -65,23 +82,19 @@ pub struct ConfigurationSourceStatus {
 }
 impl Default for ConfigurationSourceStatus {
     fn default() -> Self {
-        Self {
-            last_synced: None,
-        }
+        Self { last_synced: None }
     }
 }
 
 pub struct ConfigStoreFetcherAdapter {
     client: Arc<Client>,
-    provider: Provider
+    provider: Provider,
 }
 
 pub struct CrdConfigMapper {}
 
 impl CrdConfigMapper {
-
     fn map_http_config(http_config: HttpConfig) -> HttpConfigStoreConnectionDetails {
-
         HttpConfigStoreConnectionDetails {
             base_url: http_config.base_url.clone(),
             protocol: http_config.protocol.clone(),
@@ -94,7 +107,7 @@ impl CrdConfigMapper {
         VaultConfigStoreConnectionDetails {
             url: vault_config.server.clone(),
             headers: HashMap::new(),
-            query_params: HashMap::new()
+            query_params: HashMap::new(),
         }
     }
 }

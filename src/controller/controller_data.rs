@@ -1,13 +1,14 @@
-use std::sync::{Arc};
-use tokio::sync::{RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
-use chrono::{DateTime, Utc};
-use kube::Client;
-use kube::runtime::events::{Recorder, Reporter};
-use serde::Serialize;
 use crate::controller::utils::context::Context;
 use crate::controller::v1alpha1::crd_client::CrdClient;
 use crate::observability::metrics::Metrics;
+use chrono::{DateTime, Utc};
+use kube::runtime::events::{Recorder, Reporter};
+use kube::Client;
+use serde::Serialize;
+use crate::controller::utils::config::Config;
 
 /// Diagnostics to be exposed by the web server
 #[derive(Clone, Serialize)]
@@ -33,7 +34,7 @@ impl Default for Diagnostics {
 
 /// State shared between the controller and the web server
 #[derive(Clone, Default)]
-pub struct State{
+pub struct State {
     /// Diagnostics populated by the reconciler
     diagnostics: Arc<RwLock<Diagnostics>>,
     /// Metrics
@@ -41,8 +42,7 @@ pub struct State{
 }
 
 /// State wrapper around the controller outputs for the web server
-impl State
-{
+impl State {
     /// Metrics getter
     pub fn metrics(&self) -> String {
         let mut buffer = String::new();

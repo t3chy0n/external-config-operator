@@ -1,16 +1,11 @@
+use futures::join;
+use kube::{Api, Client};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
-use futures::join;
-use kube::{Api, Client};
-use tracing::{error, info, Level};
 use tokio::signal::unix::{signal, SignalKind};
+use tracing::{error, info, Level};
 
-use futures::stream::StreamExt;
-use tokio::signal;
-use tokio::sync::{mpsc, Notify};
-use tokio_util::sync::CancellationToken;
-use controller::utils::context::Context;
 use crate::controller::controller_data::State;
 use crate::controller::leader_election::leader_election::LeaderElection;
 use crate::controller::utils::signals::notify_cancellation_token;
@@ -18,16 +13,23 @@ use crate::controller::v1alpha1;
 use crate::controller::v1alpha1::crd_client::CrdClient;
 use crate::observability::metrics_server::run_metrics_server;
 use crate::observability::telemetry;
+use controller::utils::context::Context;
+use futures::stream::StreamExt;
+use tokio::signal;
+use tokio::sync::{mpsc, Notify};
+use tokio_util::sync::CancellationToken;
 
-mod controller;
 mod contract;
+mod controller;
 mod observability;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     telemetry::init().await;
 
-    let client = Client::try_default().await.expect("failed to create kube Client");
+    let client = Client::try_default()
+        .await
+        .expect("failed to create kube Client");
     let c = Arc::new(client);
 
     let state = State::default();
@@ -44,12 +46,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (shutdown_send, mut shutdown_recv) = mpsc::unbounded_channel::<()>();
 
     let token = Arc::new(CancellationToken::new());
-    notify_cancellation_token(&token,  shutdown_recv);
+    notify_cancellation_token(&token, shutdown_recv);
 
-
-    let leader_elector = Arc::new(
-        LeaderElection::new(token.clone(), context.clone())
-    );
+    let leader_elector = Arc::new(LeaderElection::new(token.clone(), context.clone()));
 
     if leader_elector.enabled() {
         let lease = leader_elector.claim_leadership_loop().await;
@@ -62,9 +61,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Ok(None) => {
                 info!("No k8s env variables set. Startus controller...");
-            },
+            }
             Err(e) => {
-                info!("There was some error when trying to claim lease. Closing... {:?}", e);
+                info!(
+                    "There was some error when trying to claim lease. Closing... {:?}",
+                    e
+                );
                 token.cancel()
             }
         }
@@ -84,6 +86,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
-
-
 }

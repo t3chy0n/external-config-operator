@@ -1,33 +1,43 @@
 use async_trait::async_trait;
-use std::collections::BTreeMap;
-use std::sync::Arc;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use kube::{Api, Client, Resource, ResourceExt};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
-use k8s_openapi::{ByteString, NamespaceResourceScope};
+use super::crd::claim::{
+    ClaimRef, ClaimRefParametrization, ConfigInjectionStrategy, ConfigMapClaim, SecretClaim,
+    SupportedConfigurationStoreResourceType,
+};
+use crate::contract::clients::ICrdClient;
+use crate::controller::utils::file_format::{
+    convert_to_format, convert_to_json, merge_configs, to_file_type, to_file_type_from_filename,
+    ConfigFileType, ConfigFormat,
+};
+use crate::controller::utils::parsers::text_to_json::try_parse_file_to_json;
 use k8s_openapi::api::core::v1::{ConfigMap, Secret};
+use k8s_openapi::{ByteString, NamespaceResourceScope};
 use kube::api::{Patch, PatchParams, PostParams};
 use kube::runtime::controller::Action;
 use kube::runtime::events::EventType;
 use serde_json::json;
 use tracing::log::info;
-use crate::contract::clients::ICrdClient;
-use super::crd::claim::{ClaimRef, ClaimRefParametrization, ConfigInjectionStrategy, ConfigMapClaim, SecretClaim, SupportedConfigurationStoreResourceType};
-use crate::controller::utils::parsers::text_to_json::try_parse_file_to_json;
-use crate::controller::utils::file_format::{convert_to_format, convert_to_json, merge_configs, to_file_type, to_file_type_from_filename, ConfigFileType, ConfigFormat};
 
-use crate::contract::lib::{Error, Result};
 use crate::contract::ireconcilable::{IReconcilable, ReconcilableTargetTypeBounds};
+use crate::contract::lib::{Error, Result};
 use crate::controller::controller::DOCUMENT_FINALIZER;
 use crate::controller::utils::context::Context;
 use crate::controller::utils::crd::HasData;
 use crate::controller::v1alpha1::crd::claim::{HasTarget, Refreshable};
-use crate::controller::v1alpha1::crd::configuration_store::{ClusterConfigurationStore, ConfigurationStore, Provider};
+use crate::controller::v1alpha1::crd::configuration_store::{
+    ClusterConfigurationStore, ConfigurationStore, Provider,
+};
 
 #[async_trait]
-pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget + Refreshable where
-    TargetType: ReconcilableTargetTypeBounds
+pub trait ConfigurationDiscoverer<TargetType>:
+    IReconcilable + Sized + HasTarget + Refreshable
+where
+    TargetType: ReconcilableTargetTypeBounds,
 {
     async fn compose_file(
         &self,
@@ -35,11 +45,21 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
         claim_ref: &ClaimRef,
         namespace: &str,
         file: &str,
-        data: &mut BTreeMap<String, String>
+        data: &mut BTreeMap<String, String>,
     ) -> Result<(), Error> {
-        match &claim_ref.strategy.as_ref().unwrap_or(&ConfigInjectionStrategy::Fallback) {
-            ConfigInjectionStrategy::Merge => self.apply_merge_strategy(ctx, claim_ref, namespace, file, data).await,
-            ConfigInjectionStrategy::Fallback => self.apply_fallback_strategy(ctx, claim_ref, namespace, file, data).await,
+        match &claim_ref
+            .strategy
+            .as_ref()
+            .unwrap_or(&ConfigInjectionStrategy::Fallback)
+        {
+            ConfigInjectionStrategy::Merge => {
+                self.apply_merge_strategy(ctx, claim_ref, namespace, file, data)
+                    .await
+            }
+            ConfigInjectionStrategy::Fallback => {
+                self.apply_fallback_strategy(ctx, claim_ref, namespace, file, data)
+                    .await
+            }
         }
     }
     async fn apply_merge_strategy(
@@ -54,7 +74,9 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
         let mut first_file_format: Option<ConfigFileType> = to_file_type_from_filename(file);
 
         for store_ref in &claim_ref.from {
-            let result = self.process_store_ref(ctx.clone(), store_ref, namespace, file).await?;
+            let result = self
+                .process_store_ref(ctx.clone(), store_ref, namespace, file)
+                .await?;
 
             if first_file_format.is_none() {
                 first_file_format = Some(to_file_type(&result)?);
@@ -87,8 +109,14 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
         data: &mut BTreeMap<String, String>,
     ) -> Result<(), Error> {
         for store_ref in &claim_ref.from {
-            if let Ok(file_data) = self.process_store_ref(ctx.clone(), store_ref, namespace, file).await {
-                data.insert(file.to_string(), convert_to_format(&file_data, &ConfigFileType::Json)?);
+            if let Ok(file_data) = self
+                .process_store_ref(ctx.clone(), store_ref, namespace, file)
+                .await
+            {
+                data.insert(
+                    file.to_string(),
+                    convert_to_format(&file_data, &ConfigFileType::Json)?,
+                );
                 return Ok(());
             }
         }
@@ -99,25 +127,29 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
         ctx: Arc<Context>,
         store_ref: &ClaimRefParametrization,
         namespace: &str,
-        file: &str
+        file: &str,
     ) -> Result<ConfigFormat, Error> {
-
         let provider = match store_ref.configurationStoreRef.kind {
             SupportedConfigurationStoreResourceType::ClusterConfigurationStore => {
-                let store = ctx.v1alpha1.get_cluster_config_store(&store_ref.configurationStoreRef.name).await?;
+                let store = ctx
+                    .v1alpha1
+                    .get_cluster_config_store(&store_ref.configurationStoreRef.name)
+                    .await?;
                 store.spec.provider
             }
             SupportedConfigurationStoreResourceType::ConfigurationStore => {
-                let store = ctx.v1alpha1.get_config_store(&store_ref.configurationStoreRef.name,namespace).await?;
+                let store = ctx
+                    .v1alpha1
+                    .get_config_store(&store_ref.configurationStoreRef.name, namespace)
+                    .await?;
                 store.spec.provider
             }
         };
 
         let config_store = provider.get_config_store();
-        let file = config_store.get_config(
-            store_ref.configurationStoreParams.clone(),
-            None
-        ).await?;
+        let file = config_store
+            .get_config(store_ref.configurationStoreParams.clone(), None)
+            .await?;
 
         let parsed_config = try_parse_file_to_json(&file)?;
         convert_to_json(&parsed_config)
@@ -139,12 +171,18 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
                 if existing_resource.get_data() != desired_resource.get_data() {
                     let patch = Patch::Apply(json!(&desired_resource));
                     let params = PatchParams::apply("configmap-claim-controller").force();
-                    resources.patch(&target.name, &params, &patch).await.map_err(Error::KubeError)?;
+                    resources
+                        .patch(&target.name, &params, &patch)
+                        .await
+                        .map_err(Error::KubeError)?;
                 }
             }
             Err(kube::Error::Api(ref e)) if e.code == 404 => {
                 let new_resource = self.create_resource_spec(ctx.clone()).await?;
-                resources.create(&PostParams::default(), &new_resource).await.map_err(Error::KubeError)?;
+                resources
+                    .create(&PostParams::default(), &new_resource)
+                    .await
+                    .map_err(Error::KubeError)?;
             }
             Err(e) => return Err(Error::KubeError(e)),
         }
@@ -162,7 +200,10 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
         if let Ok(mut resource) = resources.get(name).await {
             if let Some(ref mut finalizers) = resource.meta_mut().finalizers {
                 finalizers.retain(|f| f != DOCUMENT_FINALIZER);
-                resources.replace(name, &PostParams::default(), &resource).await.map_err(Error::KubeError)?;
+                resources
+                    .replace(name, &PostParams::default(), &resource)
+                    .await
+                    .map_err(Error::KubeError)?;
             }
         }
 
@@ -171,4 +212,3 @@ pub trait ConfigurationDiscoverer<TargetType>: IReconcilable + Sized + HasTarget
 
     async fn create_resource_spec(&self, ctx: Arc<Context>) -> Result<TargetType, Error>;
 }
-

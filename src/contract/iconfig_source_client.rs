@@ -1,3 +1,1 @@
-pub trait IConfigSourceClient {
-
-}
+pub trait IConfigSourceClient {}

@@ -1,0 +1,362 @@
+{{- if .Values.installCrd }}
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: configurationstores.external-config.com
+spec:
+  group: external-config.com
+  names:
+    categories: []
+    kind: ConfigurationStore
+    plural: configurationstores
+    shortNames: []
+    singular: configurationstore
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns: []
+      name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          description: Auto-generated derived type for ConfigurationStoreSpec via `CustomResource`
+          properties:
+            spec:
+              properties:
+                provider:
+                  oneOf:
+                    - required:
+                        - http
+                    - required:
+                        - vault
+                  properties:
+                    http:
+                      properties:
+                        baseUrl:
+                          type: string
+                        headers:
+                          additionalProperties:
+                            type: string
+                          nullable: true
+                          type: object
+                        path:
+                          nullable: true
+                          type: string
+                        protocol:
+                          nullable: true
+                          type: string
+                        queryParams:
+                          additionalProperties:
+                            type: string
+                          nullable: true
+                          type: object
+                      required:
+                        - baseUrl
+                      type: object
+                    vault:
+                      properties:
+                        server:
+                          type: string
+                      required:
+                        - server
+                      type: object
+                  type: object
+              required:
+                - provider
+              type: object
+            status:
+              nullable: true
+              properties:
+                lastSynced:
+                  nullable: true
+                  type: string
+              type: object
+          required:
+            - spec
+          title: ConfigurationStore
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: clusterconfigurationstores.external-config.com
+spec:
+  group: external-config.com
+  names:
+    categories: []
+    kind: ClusterConfigurationStore
+    plural: clusterconfigurationstores
+    shortNames: []
+    singular: clusterconfigurationstore
+  scope: Cluster
+  versions:
+    - additionalPrinterColumns: []
+      name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          description: Auto-generated derived type for ClusterConfigurationStoreSpec via `CustomResource`
+          properties:
+            spec:
+              properties:
+                provider:
+                  oneOf:
+                    - required:
+                        - http
+                    - required:
+                        - vault
+                  properties:
+                    http:
+                      properties:
+                        baseUrl:
+                          type: string
+                        headers:
+                          additionalProperties:
+                            type: string
+                          nullable: true
+                          type: object
+                        path:
+                          nullable: true
+                          type: string
+                        protocol:
+                          nullable: true
+                          type: string
+                        queryParams:
+                          additionalProperties:
+                            type: string
+                          nullable: true
+                          type: object
+                      required:
+                        - baseUrl
+                      type: object
+                    vault:
+                      properties:
+                        server:
+                          type: string
+                      required:
+                        - server
+                      type: object
+                  type: object
+              required:
+                - provider
+              type: object
+            status:
+              nullable: true
+              properties:
+                lastSynced:
+                  nullable: true
+                  type: string
+              type: object
+          required:
+            - spec
+          title: ClusterConfigurationStore
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: configmapclaims.external-config.com
+spec:
+  group: external-config.com
+  names:
+    categories: []
+    kind: ConfigMapClaim
+    plural: configmapclaims
+    shortNames:
+      - cmc
+    singular: configmapclaim
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns: []
+      name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          description: Auto-generated derived type for ConfigMapClaimSpec via `CustomResource`
+          properties:
+            spec:
+              properties:
+                data:
+                  additionalProperties:
+                    properties:
+                      from:
+                        items:
+                          properties:
+                            configurationStoreParams:
+                              additionalProperties:
+                                type: string
+                              nullable: true
+                              type: object
+                            configurationStoreRef:
+                              properties:
+                                kind:
+                                  enum:
+                                    - ConfigurationStore
+                                    - ClusterConfigurationStore
+                                  type: string
+                                name:
+                                  type: string
+                              required:
+                                - kind
+                                - name
+                              type: object
+                          required:
+                            - configurationStoreRef
+                          type: object
+                        type: array
+                      strategy:
+                        enum:
+                          - Merge
+                          - Fallback
+                        nullable: true
+                        type: string
+                    required:
+                      - from
+                    type: object
+                  type: object
+                refreshInterval:
+                  description: A time duration like '1h', '15m', '2600s'
+                  nullable: true
+                  type: string
+                target:
+                  properties:
+                    creationPolicy:
+                      enum:
+                        - Owned
+                        - Orphan
+                        - Merge
+                        - None
+                      type: string
+                    name:
+                      type: string
+                  required:
+                    - creationPolicy
+                    - name
+                  type: object
+              required:
+                - data
+                - target
+              type: object
+            status:
+              nullable: true
+              properties:
+                last_synced:
+                  nullable: true
+                  type: string
+              type: object
+          required:
+            - spec
+          title: ConfigMapClaim
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: secretclaims.external-config.com
+spec:
+  group: external-config.com
+  names:
+    categories: []
+    kind: SecretClaim
+    plural: secretclaims
+    shortNames:
+      - sc
+    singular: secretclaim
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns: []
+      name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          description: Auto-generated derived type for SecretClaimSpec via `CustomResource`
+          properties:
+            spec:
+              properties:
+                data:
+                  additionalProperties:
+                    properties:
+                      from:
+                        items:
+                          properties:
+                            configurationStoreParams:
+                              additionalProperties:
+                                type: string
+                              nullable: true
+                              type: object
+                            configurationStoreRef:
+                              properties:
+                                kind:
+                                  enum:
+                                    - ConfigurationStore
+                                    - ClusterConfigurationStore
+                                  type: string
+                                name:
+                                  type: string
+                              required:
+                                - kind
+                                - name
+                              type: object
+                          required:
+                            - configurationStoreRef
+                          type: object
+                        type: array
+                      strategy:
+                        enum:
+                          - Merge
+                          - Fallback
+                        nullable: true
+                        type: string
+                    required:
+                      - from
+                    type: object
+                  type: object
+                refreshInterval:
+                  description: A time duration like '1h', '15m', '2600s'
+                  nullable: true
+                  type: string
+                target:
+                  properties:
+                    creationPolicy:
+                      enum:
+                        - Owned
+                        - Orphan
+                        - Merge
+                        - None
+                      type: string
+                    name:
+                      type: string
+                  required:
+                    - creationPolicy
+                    - name
+                  type: object
+              required:
+                - data
+                - target
+              type: object
+            status:
+              nullable: true
+              properties:
+                last_synced:
+                  nullable: true
+                  type: string
+              type: object
+          required:
+            - spec
+          title: SecretClaim
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}
+{{- end }}

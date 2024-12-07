@@ -1,12 +1,12 @@
-use std::collections::HashMap;
-use async_trait::async_trait;
 use crate::contract::iconfigstore::IConfigStore;
 use crate::contract::lib::Error;
+use async_trait::async_trait;
+use std::collections::HashMap;
 
 pub struct VaultConfigStoreConnectionDetails {
     pub url: String,
     pub headers: HashMap<String, String>,
-    pub query_params: HashMap<String, String>
+    pub query_params: HashMap<String, String>,
 }
 
 pub struct VaultConfigStore {
@@ -23,11 +23,11 @@ impl IConfigStore for VaultConfigStore {
     async fn get_config(
         &self,
         query_params: Option<HashMap<String, String>>,
-        headers: Option<HashMap<String, String>>
+        headers: Option<HashMap<String, String>>,
     ) -> Result<String, Error> {
         // HTTP client logic (could use reqwest, etc.)
 
-        println!("Fetching config from HTTP at {}", self.config.url );
+        println!("Fetching config from HTTP at {}", self.config.url);
         Ok(String::from("Vault config"))
     }
 }
